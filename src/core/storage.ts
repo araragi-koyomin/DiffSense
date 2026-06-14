@@ -1,6 +1,7 @@
 import initSqlJs from 'sql.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { StoredCommit, StoredSummary, HookState } from './types';
 
 let SQL: Awaited<ReturnType<typeof initSqlJs>> | null = null;
 /**
@@ -78,4 +79,93 @@ export function closeDatabase(dbPath: string): void {
 export function closeAllDatabases(): void {
   for (const [, db] of instances) db.close();
   instances.clear();
+}
+
+function saveDbInternal(dbPath: string): void {
+  const db = instances.get(dbPath);
+  if (db) fs.writeFileSync(dbPath, Buffer.from(db.export()));
+}
+
+function queryAll<T>(db: SqlJsDatabase, sql: string, params: any[] = []): T[] {
+  const stmt = db.prepare(sql);
+  if (params.length) stmt.bind(params);
+  const rows: T[] = [];
+  while (stmt.step()) rows.push(stmt.getAsObject() as unknown as T);
+  stmt.free();
+  return rows;
+}
+
+function queryOne<T>(db: SqlJsDatabase, sql: string, params: any[] = []): T | null {
+  const rows = queryAll<T>(db, sql, params);
+  return rows.length > 0 ? rows[0] : null;
+}
+
+// ---- Commit CRUD ----
+export function upsertCommit(dbPath: string, c: StoredCommit): void {
+  const db = getDatabase(dbPath);
+  db.run('INSERT OR REPLACE INTO commits (repo_path,commit_hash,author,date,message,generated_at) VALUES (?,?,?,?,?,?)',
+    [c.repo_path, c.commit_hash, c.author, c.date, c.message, c.generated_at]);
+  saveDbInternal(dbPath);
+}
+
+export function getCommit(dbPath: string, repo: string, hash: string): StoredCommit | null {
+  return queryOne<StoredCommit>(getDatabase(dbPath), 'SELECT * FROM commits WHERE repo_path=? AND commit_hash=?', [repo, hash]);
+}
+
+export function deleteCommit(dbPath: string, repo: string, hash: string): void {
+  const db = getDatabase(dbPath);
+  db.run('DELETE FROM summaries WHERE repo_path=? AND commit_hash=?', [repo, hash]);
+  db.run('DELETE FROM commits WHERE repo_path=? AND commit_hash=?', [repo, hash]);
+  saveDbInternal(dbPath);
+}
+
+// ---- Summary CRUD ----
+export function upsertSummary(dbPath: string, s: Omit<StoredSummary, 'id' | 'created_at'>): void {
+  const db = getDatabase(dbPath);
+  db.run('DELETE FROM summaries WHERE commit_hash=? AND repo_path=?', [s.commit_hash, s.repo_path]);
+  db.run('INSERT INTO summaries (commit_hash,repo_path,summary,intent,scope,risk,truncated,model,tokens_used,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [s.commit_hash, s.repo_path, s.summary, s.intent, s.scope, s.risk, s.truncated, s.model, s.tokens_used, new Date().toISOString()]);
+  saveDbInternal(dbPath);
+}
+
+export function getSummaryByHash(dbPath: string, repo: string, hash: string): StoredSummary | null {
+  return queryOne<StoredSummary>(getDatabase(dbPath), 'SELECT * FROM summaries WHERE repo_path=? AND commit_hash=?', [repo, hash]);
+}
+
+export function getSummariesByRepo(dbPath: string, repo: string, limit: number, offset: number, search?: string): StoredSummary[] {
+  const db = getDatabase(dbPath);
+  let sql = 'SELECT s.* FROM summaries s JOIN commits c ON s.commit_hash=c.commit_hash AND s.repo_path=c.repo_path WHERE s.repo_path=?';
+  const params: any[] = [repo];
+  if (search) { sql += ' AND (s.summary LIKE ? OR c.message LIKE ?)'; params.push('%' + search + '%', '%' + search + '%'); }
+  sql += ' ORDER BY c.date DESC LIMIT ? OFFSET ?'; params.push(limit, offset);
+  return queryAll<StoredSummary>(db, sql, params);
+}
+
+export function getStats(dbPath: string, repo: string): {
+  totalCommits: number; modelDistribution: Record<string, number>;
+  monthlyCounts: { month: string; count: number }[]; totalTokensUsed: number;
+} {
+  const db = getDatabase(dbPath);
+  const cnt = queryOne<{ c: number }>(db, 'SELECT COUNT(*) as c FROM summaries WHERE repo_path=?', [repo]);
+  const models = queryAll<{ model: string; c: number }>(db, 'SELECT model, COUNT(*) as c FROM summaries WHERE repo_path=? GROUP BY model', [repo]);
+  const months = queryAll<{ month: string; count: number }>(db, "SELECT substr(c.date,1,7) as month, COUNT(*) as count FROM summaries s JOIN commits c ON s.commit_hash=c.commit_hash AND s.repo_path=c.repo_path WHERE s.repo_path=? GROUP BY month ORDER BY month ASC", [repo]);
+  const tokens = queryOne<{ t: number }>(db, 'SELECT COALESCE(SUM(tokens_used),0) as t FROM summaries WHERE repo_path=?', [repo]);
+  const md: Record<string, number> = {}; models.forEach(m => md[m.model] = m.c);
+  return { totalCommits: cnt?.c || 0, modelDistribution: md, monthlyCounts: months, totalTokensUsed: tokens?.t || 0 };
+}
+
+// ---- Hook State ----
+export function getHookState(dbPath: string, repo: string): HookState | null {
+  return queryOne<HookState>(getDatabase(dbPath), 'SELECT * FROM hook_state WHERE repo_path=?', [repo]);
+}
+
+export function setHookState(dbPath: string, s: HookState): void {
+  const db = getDatabase(dbPath);
+  db.run('INSERT OR REPLACE INTO hook_state (repo_path,installed_at,backup_path) VALUES (?,?,?)', [s.repo_path, s.installed_at, s.backup_path]);
+  saveDbInternal(dbPath);
+}
+
+export function removeHookState(dbPath: string, repo: string): void {
+  getDatabase(dbPath).run('DELETE FROM hook_state WHERE repo_path=?', [repo]);
+  saveDbInternal(dbPath);
 }
