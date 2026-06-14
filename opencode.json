@@ -1,4 +1,13 @@
 {
   "plugin": ["~/.config/opencode/node_modules/superpowers"],
-  "$schema": "https://opencode.ai/config.json"
+  "$schema": "https://opencode.ai/config.json",
+  "skills": {
+    "paths": ["~/.config/opencode/open-design/skills"]
+  },
+  "references": {
+    "open-design-systems": {
+      "path": "~/.config/opencode/open-design/design-systems",
+      "description": "Open Design design systems (Linear, Vercel, Stripe, etc.) - use when picking a design system for frontend work"
+    }
+  }
 }
