@@ -10,11 +10,11 @@ AI 驱动的 git commit 语义摘要工具。让 `git diff` 不仅能告诉你**
 docker pull ghcr.io/araragi-koyomin/diffsense:latest
 
 # CLI 模式
-docker run diffsense config
-docker run -e DEEPSEEK_API_KEY="sk-xxx" diffsense explain HEAD
+docker run -it ghcr.io/araragi-koyomin/diffsense config
+docker run -e DEEPSEEK_API_KEY="sk-xxx" ghcr.io/araragi-koyomin/diffsense explain HEAD
 
 # Web 模式
-docker run -p 3000:3000 diffsense web
+docker run -p 3000:3000 ghcr.io/araragi-koyomin/diffsense web
 ```
 
 ### 方式二：从源码安装
