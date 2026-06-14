@@ -10,3 +10,4 @@ __pycache__/
 .superpowers/
 Superpowers_Workflow_Guide.md
 .aider*
+.worktrees/
