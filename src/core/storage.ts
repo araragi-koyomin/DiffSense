@@ -18,6 +18,7 @@ const DDL = `
 CREATE TABLE IF NOT EXISTS commits (
     repo_path TEXT NOT NULL, commit_hash TEXT NOT NULL,
     author TEXT, date TEXT, message TEXT, generated_at TEXT,
+    branch TEXT DEFAULT '',
     PRIMARY KEY (commit_hash, repo_path)
 );
 CREATE TABLE IF NOT EXISTS summaries (
@@ -61,6 +62,8 @@ export async function initDatabase(dbPath: string): Promise<void> {
   for (const s of stmts) {
     db.run(s + ';');
   }
+  // migration: add branch column if missing
+  try { db.run('ALTER TABLE commits ADD COLUMN branch TEXT DEFAULT \'\';'); } catch {}
   saveDb(dbPath, db);
   instances.set(dbPath, db);
 }
@@ -167,5 +170,12 @@ export function setHookState(dbPath: string, s: HookState): void {
 
 export function removeHookState(dbPath: string, repo: string): void {
   getDatabase(dbPath).run('DELETE FROM hook_state WHERE repo_path=?', [repo]);
+  saveDbInternal(dbPath);
+}
+
+// ---- Branch ----
+
+export function updateBranch(dbPath: string, repo: string, hash: string, branch: string): void {
+  getDatabase(dbPath).run('UPDATE commits SET branch=? WHERE repo_path=? AND commit_hash=?', [branch, repo, hash]);
   saveDbInternal(dbPath);
 }

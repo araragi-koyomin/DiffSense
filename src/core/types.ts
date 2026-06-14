@@ -35,6 +35,7 @@ export interface StoredCommit {
   date: string;
   message: string;
   generated_at: string;
+  branch?: string;
 }
 
 export interface StoredSummary {

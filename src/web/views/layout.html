@@ -53,6 +53,15 @@
     .batch-bar .btn-secondary { background:var(--accents-3); color:var(--geist-foreground); border:1px solid var(--accents-5); }
     .status-badge { display:inline-block; padding:0.15rem 0.5rem; border-radius:3px; font-size:0.75rem; margin-top:0.5rem; }
     .status-badge.analyzing { background:#f0f5ff; color:var(--geist-success); }
+    .progress-bar { background:var(--accents-2); border-radius:var(--geist-radius); height:6px; margin-bottom:1rem; position:relative; }
+    .progress-fill { background:var(--geist-foreground); height:100%; border-radius:var(--geist-radius); transition:width 0.3s; }
+    .progress-text { position:absolute; right:0; top:-1.4rem; font-size:0.75rem; color:var(--accents-5); }
+    .branch-badge { display:inline-block; padding:0.1rem 0.4rem; border:1px solid; border-radius:3px; font-size:0.65rem; vertical-align:middle; }
+    .scope-mini { display:inline-block; background:var(--accents-1); border:1px solid var(--accents-2); border-radius:3px; padding:0.1rem 0.35rem; font-size:0.65rem; font-family:var(--font-mono); margin-right:0.2rem; }
+    .diff-preview { background:var(--accents-1); border:1px solid var(--accents-2); border-radius:var(--geist-radius); padding:1rem; font-size:0.75rem; font-family:var(--font-mono); line-height:1.5; overflow-x:auto; white-space:pre-wrap; word-break:break-all; max-height:400px; overflow-y:auto; }
+    .gh-link { font-size:0.8rem; color:var(--accents-5); text-decoration:none; margin-left:0.25rem; }
+    .gh-link:hover { color:var(--geist-foreground); }
+    .card-top { display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap; margin-bottom:0.3rem; }
     footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--accents-2); font-size:0.8rem; color:var(--accents-5); text-align:center; }
     @media (max-width:640px) { body { padding:1rem; } }
   </style>

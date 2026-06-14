@@ -3,6 +3,11 @@
     hx-get="/" hx-trigger="keyup changed delay:300ms" hx-target="body" />
 </div>
 
+<div id="progress-bar" class="progress-bar" style="display:none;">
+  <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+  <span id="progress-text" class="progress-text"></span>
+</div>
+
 <div class="batch-bar" id="batch-bar" style="display:none;">
   <span id="batch-count">已选 0 项</span>
   <button class="btn" onclick="batchAnalyze()">分析选中</button>
@@ -15,6 +20,9 @@
 {{{pagination}}}
 
 <script>
+let pollTimer = null;
+let currentJobId = '';
+
 function toggleSelect(hash, el) {
   el.closest('.card').classList.toggle('selected', el.checked);
   updateBatchBar();
@@ -36,33 +44,54 @@ function getSelectedHashes() {
   return Array.from(document.querySelectorAll('.commit-checkbox:checked')).map(cb => cb.value);
 }
 
+function showProgress(current, total, text) {
+  const bar = document.getElementById('progress-bar');
+  const fill = document.getElementById('progress-fill');
+  const txt = document.getElementById('progress-text');
+  bar.style.display = 'block';
+  fill.style.width = total ? Math.round(current / total * 100) + '%' : '0%';
+  txt.textContent = text || (current + ' / ' + total);
+}
+
+function hideProgress() {
+  document.getElementById('progress-bar').style.display = 'none';
+}
+
+function startPoll(jobId) {
+  currentJobId = jobId;
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    const resp = await fetch('/api/analyze-progress?jobId=' + jobId);
+    const { data } = await resp.json();
+    showProgress(data.completed, data.total, data.current ? '正在: ' + data.current : '');
+    if (data.done) {
+      clearInterval(pollTimer);
+      hideProgress();
+      location.reload();
+    }
+  }, 800);
+}
+
 async function batchAnalyze() {
   const hashes = getSelectedHashes();
   if (!hashes.length) return;
-  document.querySelectorAll('.commit-checkbox:checked').forEach(cb => {
-    const card = cb.closest('.card');
-    card.querySelector('.status-badge')?.remove();
-    const badge = document.createElement('span');
-    badge.className = 'status-badge analyzing';
-    badge.textContent = '分析中...';
-    card.appendChild(badge);
-  });
   const resp = await fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ hashes })
   });
   const { data } = await resp.json();
-  location.reload();
+  if (data.jobId) startPoll(data.jobId);
 }
 
 async function analyzeAll() {
   if (!confirm('将分析仓库中所有未生成摘要的 commit，可能需要较长时间。继续？')) return;
-  const bar = document.getElementById('batch-bar');
-  bar.innerHTML = '<span>正在分析全部未生成摘要的 commit...</span>';
-  bar.style.display = 'flex';
   const resp = await fetch('/api/analyze-all', { method: 'POST' });
   const { data } = await resp.json();
-  location.reload();
+  if (data.skipped > 0 && data.total === 0) {
+    alert('所有 commit 均已生成摘要（' + data.skipped + ' 条）');
+    return;
+  }
+  if (data.jobId) startPoll(data.jobId);
 }
 </script>
