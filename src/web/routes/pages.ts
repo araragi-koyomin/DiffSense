@@ -55,6 +55,74 @@ async function getRepoMeta(rp: string): Promise<{ githubUrl: string; branchMap: 
   return { githubUrl, branchMap };
 }
 
+interface CommitWithStatus {
+  hash: string; author: string; date: string; message: string;
+  branch: string; hasSummary: boolean;
+  summary?: string; model?: string; risk?: string; scope?: string[];
+}
+
+async function getAllCommitsWithStatus(
+  rp: string, dbPath: string, branch?: string, maxCount: number = 200
+): Promise<CommitWithStatus[]> {
+  const sg = (await import('simple-git')).default;
+  const git = sg(rp);
+  const branchArg = (branch && branch !== '__all__') ? branch : '--all';
+  let logText = '';
+  try {
+    logText = await git.raw(['log', branchArg, '--format=%H%n%an%n%aI%n%s', `--max-count=${maxCount}`]);
+  } catch {
+    return [];
+  }
+  const lines = logText.trim().split('\n');
+  const commits: CommitWithStatus[] = [];
+  for (let i = 0; i + 3 < lines.length; i += 4) {
+    const h = lines[i]; if (!h) continue;
+    commits.push({ hash: h, author: lines[i + 1] || '', date: lines[i + 2] || '', message: lines[i + 3] || '', branch: '', hasSummary: false });
+  }
+
+  // resolve branch per commit
+  try {
+    const brs = await git.branchLocal();
+    for (const br of Object.keys(brs.branches)) {
+      const bl = await git.raw(['log', br, '--format=%H', `--max-count=${maxCount}`]);
+      for (const c of bl.trim().split('\n')) {
+        if (c) { const found = commits.find(x => x.hash === c); if (found && !found.branch) found.branch = br; }
+      }
+    }
+  } catch {}
+
+  // annotate with summary status from DB
+  if (fs.existsSync(dbPath)) {
+    await initDatabase(dbPath);
+    for (const c of commits) {
+      const s = getSummaryByHash(dbPath, rp, c.hash);
+      if (s) {
+        c.hasSummary = true;
+        c.summary = s.summary;
+        c.model = s.model;
+        c.risk = s.risk;
+        c.scope = JSON.parse(s.scope || '[]');
+      }
+    }
+    closeDatabase(dbPath);
+  }
+
+  return commits;
+}
+
+async function buildBranchBar(rp: string, activeBranch: string, searchVal: string): Promise<string> {
+  const sg = (await import('simple-git')).default;
+  let branches: string[] = [];
+  try { branches = Object.keys((await sg(rp).branchLocal()).branches); } catch {}
+  const searchQ = searchVal ? `&q=${encodeURIComponent(searchVal)}` : '';
+  let html = `<a href="/?${searchVal ? 'q=' + encodeURIComponent(searchVal) : ''}" class="branch-btn${activeBranch === '__all__' || !activeBranch ? ' active' : ''}">全部</a>`;
+  for (const br of branches) {
+    const active = activeBranch === br ? ' active' : '';
+    html += `<a href="/?branch=${encodeURIComponent(br)}${searchQ}" class="branch-btn${active}">${escapeHtml(br)}</a>`;
+  }
+  return html;
+}
+
 export function registerPageRoutes(app: Express, repoPath?: string): void {
   const rp = repoPath || process.cwd();
   const dbPath = path.join(rp, '.diffsense.db');
