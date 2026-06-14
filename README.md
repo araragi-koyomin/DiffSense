@@ -5,7 +5,10 @@ AI 驱动的 git commit 语义摘要工具。让 `git diff` 不仅能告诉你**
 ## 快速开始（Docker + docker-compose）
 
 ```bash
-# 1. 拉取镜像
+# 1. 获取镜像（二选一）
+#    A. 从源码构建（推荐，确保最新）:
+docker-compose build
+#    B. 从 GHCR 拉取:
 docker pull ghcr.io/araragi-koyomin/diffsense:latest
 
 # 2. 配置 API Key

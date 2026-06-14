@@ -1,5 +1,6 @@
 services:
   diffsense:
+    build: .
     image: ghcr.io/araragi-koyomin/diffsense:latest
     container_name: diffsense
     ports:
