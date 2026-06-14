@@ -43,6 +43,16 @@
     .stat-label { font-size:0.8rem; color:var(--accents-5); margin-top:0.25rem; }
     .chart-container { margin:1.5rem 0; }
     .scope-tag { display:inline-block; background:var(--accents-1); border:1px solid var(--accents-2); border-radius:3px; padding:0.15rem 0.5rem; font-size:0.75rem; font-family:var(--font-mono); margin:0.15rem; }
+    .card { display:flex; align-items:flex-start; gap:0.75rem; }
+    .card-check { display:flex; align-items:center; padding-top:0.15rem; }
+    .card-check input { width:16px; height:16px; accent-color:var(--geist-foreground); cursor:pointer; }
+    .card-body { flex:1; }
+    .card.selected { border-color:var(--geist-foreground); background:var(--accents-1); }
+    .batch-bar { display:flex; align-items:center; gap:1rem; padding:0.75rem 1rem; background:var(--geist-foreground); color:var(--geist-background); border-radius:var(--geist-radius); margin-bottom:1rem; position:sticky; top:0; z-index:10; }
+    .batch-bar .btn { background:var(--geist-background); color:var(--geist-foreground); }
+    .batch-bar .btn-secondary { background:var(--accents-3); color:var(--geist-foreground); border:1px solid var(--accents-5); }
+    .status-badge { display:inline-block; padding:0.15rem 0.5rem; border-radius:3px; font-size:0.75rem; margin-top:0.5rem; }
+    .status-badge.analyzing { background:#f0f5ff; color:var(--geist-success); }
     footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--accents-2); font-size:0.8rem; color:var(--accents-5); text-align:center; }
     @media (max-width:640px) { body { padding:1rem; } }
   </style>

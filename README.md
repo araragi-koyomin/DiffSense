@@ -15,13 +15,11 @@ docker run -it ghcr.io/araragi-koyomin/diffsense config
 # CLI 模式
 # Linux/macOS:
 docker run -v $(pwd):/repo -e DEEPSEEK_API_KEY="sk-xxx" ghcr.io/araragi-koyomin/diffsense explain HEAD -r /repo
-# Windows PowerShell:
-docker run -v ${PWD}:/repo -e DEEPSEEK_API_KEY="sk-xxx" ghcr.io/araragi-koyomin/diffsense explain HEAD -r /repo
-
 docker run -v $(pwd):/repo ghcr.io/araragi-koyomin/diffsense log -r /repo
+# $(pwd) 换成所需要使用项目的仓库的路径
 
 # Web 模式
-docker run -v $(pwd):/repo -e DEEPSEEK_API_KEY="sk-xxx" -p 3000:3000 ghcr.io/araragi-koyomin/diffsense web -r /repo
+docker run -v $(pwd):/repo -e DEEPSEEK_API_KEY="sk-xxx" -p 9090:3000 ghcr.io/araragi-koyomin/diffsense web -r /repo
 ```
 
 ### 方式二：从源码安装
@@ -58,7 +56,7 @@ ds web
 ```
 
 三个页面：
-- **摘要列表** — 搜索、分页、浏览所有 commit 摘要
+- **摘要列表** — 搜索、分页、多选批量分析、一键分析全部未生成摘要的 commit
 - **详情页** — 完整结构化卡片（摘要 / 意图 / 影响范围 / 风险）
 - **统计面板** — 月度趋势图、模型使用分布、Token 消耗统计
 

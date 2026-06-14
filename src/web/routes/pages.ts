@@ -43,7 +43,7 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
       let riskClass = 'risk-low';
       if (s.risk && s.risk.includes('高')) riskClass = 'risk-high';
       else if (s.risk && s.risk.includes('中')) riskClass = 'risk-mid';
-      rows += `<div class="card" style="cursor:pointer;"><span class="hash">${hash7}</span> <span style="margin-left:0.5rem;font-size:0.75rem;color:var(--accents-5);">${s.model||'N/A'}</span><div class="summary-line">${escapeHtml(s.summary)}</div><div class="meta">${date} &middot; ${author}${s.risk?' &middot; <span class="'+riskClass+'">'+escapeHtml(s.risk)+'</span>':''}</div></div>`;
+      rows += `<div class="card"><label class="card-check"><input type="checkbox" class="commit-checkbox" value="${s.commit_hash}" onchange="toggleSelect('${s.commit_hash}', this)" /></label><div class="card-body"><span class="hash">${hash7}</span> <span style="margin-left:0.5rem;font-size:0.75rem;color:var(--accents-5);">${s.model||'N/A'}</span><div class="summary-line">${escapeHtml(s.summary)}</div><div class="meta">${date} &middot; ${author}${s.risk?' &middot; <span class="'+riskClass+'">'+escapeHtml(s.risk)+'</span>':''}</div></div></div>`;
     }
     if (!rows) rows = '<p style="text-align:center;color:var(--accents-5);">暂无匹配的摘要记录。</p>';
 

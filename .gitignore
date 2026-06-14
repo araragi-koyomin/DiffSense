@@ -8,6 +8,7 @@ __pycache__/
 *.pyc
 .DS_Store
 .superpowers/
+*.db
 Superpowers_Workflow_Guide.md
 .aider*
 .worktrees/

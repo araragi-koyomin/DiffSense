@@ -1,5 +1,68 @@
 <div class="search-bar">
-  <input type="text" name="q" placeholder="搜索 commit message 或摘要..." value="{{searchVal}}" hx-get="/" hx-trigger="keyup changed delay:300ms" hx-target="body" />
+  <input type="text" name="q" placeholder="搜索 commit message 或摘要..." value="{{searchVal}}"
+    hx-get="/" hx-trigger="keyup changed delay:300ms" hx-target="body" />
 </div>
+
+<div class="batch-bar" id="batch-bar" style="display:none;">
+  <span id="batch-count">已选 0 项</span>
+  <button class="btn" onclick="batchAnalyze()">分析选中</button>
+  <button class="btn btn-secondary" onclick="analyzeAll()">分析全部未生成</button>
+</div>
+
+<form id="commit-form">
 <div id="commit-list">{{{rows}}}</div>
+</form>
 {{{pagination}}}
+
+<script>
+function toggleSelect(hash, el) {
+  el.closest('.card').classList.toggle('selected', el.checked);
+  updateBatchBar();
+}
+
+function updateBatchBar() {
+  const checked = document.querySelectorAll('.commit-checkbox:checked');
+  const bar = document.getElementById('batch-bar');
+  const count = document.getElementById('batch-count');
+  if (checked.length > 0) {
+    bar.style.display = 'flex';
+    count.textContent = '已选 ' + checked.length + ' 项';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function getSelectedHashes() {
+  return Array.from(document.querySelectorAll('.commit-checkbox:checked')).map(cb => cb.value);
+}
+
+async function batchAnalyze() {
+  const hashes = getSelectedHashes();
+  if (!hashes.length) return;
+  document.querySelectorAll('.commit-checkbox:checked').forEach(cb => {
+    const card = cb.closest('.card');
+    card.querySelector('.status-badge')?.remove();
+    const badge = document.createElement('span');
+    badge.className = 'status-badge analyzing';
+    badge.textContent = '分析中...';
+    card.appendChild(badge);
+  });
+  const resp = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hashes })
+  });
+  const { data } = await resp.json();
+  location.reload();
+}
+
+async function analyzeAll() {
+  if (!confirm('将分析仓库中所有未生成摘要的 commit，可能需要较长时间。继续？')) return;
+  const bar = document.getElementById('batch-bar');
+  bar.innerHTML = '<span>正在分析全部未生成摘要的 commit...</span>';
+  bar.style.display = 'flex';
+  const resp = await fetch('/api/analyze-all', { method: 'POST' });
+  const { data } = await resp.json();
+  location.reload();
+}
+</script>
