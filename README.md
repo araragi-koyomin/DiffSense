@@ -12,8 +12,12 @@ docker pull ghcr.io/araragi-koyomin/diffsense:latest
 # 配置（交互式）
 docker run -it ghcr.io/araragi-koyomin/diffsense config
 
-# CLI 模式（挂载当前仓库目录）
+# CLI 模式
+# Linux/macOS:
 docker run -v $(pwd):/repo -e DEEPSEEK_API_KEY="sk-xxx" ghcr.io/araragi-koyomin/diffsense explain HEAD -r /repo
+# Windows PowerShell:
+docker run -v ${PWD}:/repo -e DEEPSEEK_API_KEY="sk-xxx" ghcr.io/araragi-koyomin/diffsense explain HEAD -r /repo
+
 docker run -v $(pwd):/repo ghcr.io/araragi-koyomin/diffsense log -r /repo
 
 # Web 模式
