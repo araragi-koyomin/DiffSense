@@ -14,7 +14,7 @@ export async function startWebServer(port: number, repoPath?: string): Promise<v
   for (let i = 0; i < 3; i++) {
     try {
       await new Promise<void>((resolve, reject) => {
-        app.listen(cp, '127.0.0.1', () => { console.log('DiffSense Web 界面已启动: http://localhost:' + cp); resolve(); })
+        app.listen(cp, () => { console.log('DiffSense Web 界面已启动: http://localhost:' + cp); resolve(); })
           .on('error', (e: any) => { if (e.code === 'EADDRINUSE') reject(new Error('EADDRINUSE')); else reject(e); });
       });
       return;
