@@ -1,0 +1,10 @@
+diff --git a/src/auth/login.ts b/src/auth/login.ts
+--- a/src/auth/login.ts
++++ b/src/auth/login.ts
+@@ -10,6 +10,9 @@
++  if (!user.active) throw new Error('deactivated');
+diff --git a/src/auth/token.ts b/src/auth/token.ts
+--- a/src/auth/token.ts
++++ b/src/auth/token.ts
+@@ -5,3 +5,5 @@
++  const expiry = Date.now() + 3600000;
