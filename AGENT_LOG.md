@@ -170,3 +170,47 @@
   - T16 拆分是必要的——原始粒度在 subagent 执行时会因为跨文件依赖导致 subagent 上下文膨胀，拆分后每个 task 聚焦单一页面
   - Open Design 引用应在指定时立即标注路径（`~/.config/opencode/open-design/design-systems/vercel/DESIGN.md`），否则 subagent 会忽略设计约束
   - 冷启动验证 V0 是课程强制要求（§4.5），应在 brainstorming 结束后立即列入 PLAN
+
+---
+
+## [2026-06-14] Phase 3: 冷启动验证 V0 — SPEC_PROCESS 记录
+
+### 条目 #7 — 启动 Aider 冷启动验证
+
+- **时间**: 2026-06-14
+- **触发的 Superpowers 技能**: 无（人工操作，非 Superpowers 流程）
+- **验证 Agent**: Aider（deepseek-chat），类型不同于主开发 agent（OpenCode）
+
+- **关键 Prompt（给 Aider）**:
+  ```
+  你现在是一个代码实现者。我将提供两份文档供你参考：
+  1. SPEC.md — DiffSense 项目的完整设计文档
+  2. PLAN.md — DiffSense 项目的实现计划
+  你的任务是从 PLAN.md 中选择 T1（核心类型定义）来实现。
+  重要规则：只依据 SPEC.md 和 PLAN.md；遇到不明确立刻停下问；严格遵循 TDD
+  ```
+
+- **Aider 的第一个提问**:
+  > "PLAN.md 中 T1 的测试代码使用了 describe、it、expect 等全局 API，但当前目录下还没有 vitest.config.ts 文件（T0 尚未执行）。我需要先创建 vitest.config.ts 吗？"
+
+- **人工干预**:
+  - 回复 Aider：只创建 T1 所需的最小脚手架（tsconfig.json + vitest.config.ts + npm install），然后继续 T1 TDD 流程
+  - 在 SPEC_PROCESS.md §4 中记录此提问为"问题 1"
+  - 判定为非 SPEC 缺陷，PLAN minor 改进项
+
+- **对 PLAN.md 的修订**:
+  ```diff
+   ### T1: 核心类型定义
+  +> **前置条件:** 若项目尚未初始化（T0 未执行），先创建 `tsconfig.json`
+  +> （T0 第2步）与 `vitest.config.ts`（T0 第3步），再开始本 task。
+  ```
+
+- **Commit**:
+  - PLAN.md: 添加 T1 precondition 说明
+  - SPEC_PROCESS.md: 创建文件，含完整冷启动验证 §4 记录
+  - AGENT_LOG.md: 追加本条目
+
+- **学到的教训**:
+  - Aider 在 PLAN 依赖图标注清晰的情况下能正确识别 T0→T1 依赖关系，说明依赖图本身质量可靠
+  - 冷启动验证中"task 的前置条件描述"比日常开发场景更重要——日常开发中 agent 有项目上下文自然知道脚手架已存在，但冷启动 agent 只能靠文档
+  - SPEC_PROCESS.md 的 §1-§3（brainstorming 回顾）建议在冷启动验证完成后再补写，此时对 spec 质量已有客观反馈

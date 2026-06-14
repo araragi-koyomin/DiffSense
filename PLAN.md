@@ -179,6 +179,8 @@ git commit -m "chore: 搭建 TypeScript + vitest 项目脚手架"
 
 ### T1: 核心类型定义
 
+> **前置条件:** 若项目尚未初始化（T0 未执行），先创建 `tsconfig.json`（T0 第2步）与 `vitest.config.ts`（T0 第3步），再开始本 task。
+
 **涉及文件:** `src/core/types.ts`、`tests/core/types.test.ts`
 
 - [ ] **第1步：先写测试（红灯）**
