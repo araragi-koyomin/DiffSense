@@ -100,3 +100,41 @@
 ### 下一步
 
 按 Superpowers 流程，进入 **Phase 2: `writing-plans`**，将 SPEC.md 拆解为可执行的 task 列表（PLAN.md）。
+
+---
+
+## [2026-06-14] Phase 2: Writing Plans — PLAN 生成
+
+### 条目 #4 — Writing Plans 执行
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `writing-plans`
+- **使用的智能体**: OpenCode (deepseek-v4-pro)
+- **关键 prompt / context 配置**:
+  - 加载了 `writing-plans` 技能（含 plan-document-reviewer-prompt.md）
+  - 读取了已经确认的 SPEC.md 作为输入
+  - 按 Superpowers_Workflow_Guide.md 中「第 2 步：Writing Plans → PLAN.md」的要求执行
+- **范围检查结果**: Core Engine、CLI、Web 三者共享同一数据模型，不构成独立子系统，单 PLAN 覆盖全部
+- **产物**: PLAN.md，包含：
+  - REQUIRED SUB-SKILL 声明
+  - 任务依赖图（含并行标记）
+  - 19 个 Task（T0 项目脚手架 → T19 README）
+  - 每个 Task 含 4-5 个 Step：RED（测试）→ GREEN（实现）→ 验证 → Commit
+  - 每个 Step 含完整代码块和精确验证命令
+- **人工干预**: 首次尝试用 tool call 直接输出 PLAN 内容时因体积过大（约 114KB）被 JSON 解析截断。改用 Write 工具直接写文件成功
+- **学到的教训**:
+  - 当 PLAN 代码量很大时（每个 task 含完整实现代码），应优先用文件写入而非 tool call 返回
+  - `writing-plans` 技能要求"每步含完整代码块"导致 PLAN 体积膨胀——实际执行时 subagent 可参考 SPEC，PLAN 中可适度精简代码量
+  - 依赖图对后续 subagent-driven 并行派发至关重要，应放在 PLAN 头部
+
+### 条目 #5 — PLAN 自审
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `writing-plans`（自审阶段）
+- **自审结果**:
+  - SPEC 覆盖率: 全部 10 章节均有对应 Task（核心引擎→CLI→Web→Docker→CI→README）
+  - 占位符扫描: 零 TBD / TODO / "add error handling"
+  - 类型一致性: T1 定义的接口在 T2–T16 中名称一致
+  - 依赖标注: 依赖图和并行分组已显式标注
+- **人工干预**: 无
+- **学到的教训**: T16 将 Web 的 list/detail/stats/API 四个子模块合并为一个 task——粒度偏粗（实际需 10-15 分钟），后续 subagent 执行时可能需要拆分
