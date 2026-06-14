@@ -409,3 +409,39 @@
   - CLI 入口作为共享文件（所有命令注册在此），subagent 并行执行时采用"占位注释"策略避免冲突——每个 subagent 只创建自己的命令文件，集成由主 agent 统一完成
   - `registerWebCommand` 使用动态 import（`await import('../../web/index')`）可避免编译期依赖 web 模块，web 不存在时仅运行时失败
   - sql.js 缺少官方类型声明文件是已知问题，需手动编写 `.d.ts`
+
+---
+
+## [2026-06-14] Phase 8: T9-T14 CLI 层实现审查
+
+### 条目 #15 — 人工审查：CLI 源码 vs PLAN.md 对照
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: 无（人工审查）
+- **审查范围**: `.worktrees/core-engine` 下 T9-T14 全部 CLI 源码 + CLI 测试
+
+- **审查方法**:
+  1. 运行 `npm test` → **65 PASS，13 test files，0 failures**（+22 CLI 层测试）
+  2. 逐文件对照 PLAN.md T9-T14 的代码块
+  3. 检查并行派发后的集成正确性
+
+- **逐文件结果**（全部 ✅）:
+
+| 源码文件 | 行数 | 与 PLAN 一致性 |
+|----------|------|---------------|
+| `src/cli/index.ts` | 25 | 7 命令注册 + hook-post-commit，完全匹配 |
+| `src/cli/commands/config.ts` | 28 | ask() 交互 + 5 步配置，完全匹配 |
+| `src/cli/commands/init.ts` | 58 | initHook + uninitHook + registerInitCommand，完全匹配 |
+| `src/cli/commands/uninit.ts` | 16 | registerUninitCommand，完全匹配 |
+| `src/cli/commands/log.ts` | 31 | 表格渲染 + chalk，完全匹配 |
+| `src/cli/commands/explain.ts` | 58 | printCard + 缓存优先 + 实时生成，完全匹配 |
+| `src/cli/commands/generate.ts` | 53 | coverCard + 强制覆盖，完全匹配 |
+| `src/cli/hook-post-commit.ts` | 24 | 静默 catch，完全匹配 |
+| `src/cli/commands/web.ts` | 14 | 动态 import web 模块，完全匹配 |
+
+- **偏离项**: **无**
+- **审查结论**: **通过。** CLI 层 9 个源文件与 PLAN.md 逐字一致，无任何偏离。可进入 Web 层（T15-T16d）
+- **学到的教训**:
+  - CLI 层的"占位注释 + 事后集成"策略比 T0-T8 的串行模式更高效——5 个 subagent 并行执行，集成仅需取消注释 + 修复编译错误
+  - 65 个测试中 22 个来自 CLI 层，且全部为 smoke test（函数可导出、命令注册、行为验证），覆盖粒度合理——不测实现细节，只测可观察行为
+  - compare T0-T8（串行，9 个 task，无偏离项但 sql.js 结构改动）vs T9-T14（并行，6 个 task，零偏离）说明：依赖明确的独立 task 更适合并行派发
