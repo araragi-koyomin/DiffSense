@@ -481,3 +481,48 @@
   - CLI 层的"占位注释 + 事后集成"策略比 T0-T8 的串行模式更高效——5 个 subagent 并行执行，集成仅需取消注释 + 修复编译错误
   - 65 个测试中 22 个来自 CLI 层，且全部为 smoke test（函数可导出、命令注册、行为验证），覆盖粒度合理——不测实现细节，只测可观察行为
   - compare T0-T8（串行，9 个 task，无偏离项但 sql.js 结构改动）vs T9-T14（并行，6 个 task，零偏离）说明：依赖明确的独立 task 更适合并行派发
+
+---
+
+## [2026-06-14] Phase 9: T15-T16d Web 层实现审查
+
+### 条目 #18 — 人工审查：Web 源码 vs PLAN.md 对照
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: 无（人工审查）
+- **审查范围**: `.worktrees/core-engine` 下 T15-T16d 全部 Web 源码 + 测试
+
+- **审查方法**:
+  1. 运行 `npm test` → **83 PASS，18 test files，0 failures**（+18 Web 层测试）
+  2. 逐文件对照 PLAN.md T15-T16d 的代码块
+  3. 专项检查 Open Design Vercel Geist 合规性
+
+- **逐文件结果**（全部 ✅）:
+
+| 源码文件 | 行数 | 与 PLAN 一致性 |
+|----------|------|---------------|
+| `src/web/index.ts` | 26 | Express + 端口回退，完全匹配 |
+| `src/web/routes/pages.ts` | 107 | 3 页面 SSR + render/escapeHtml，完全匹配 |
+| `src/web/routes/api.ts` | 37 | 3 JSON 端点 + 404 处理，完全匹配 |
+| `src/web/views/layout.html` | 58 | Vercel Geist tokens + HTMX + 响应式，完全匹配 |
+| `src/web/views/list.html` | — | 搜索栏 + 卡片列表 + 分页，完全匹配 |
+| `src/web/views/detail.html` | — | 结构化卡片 + scope 标签 + risk 颜色，完全匹配 |
+| `src/web/views/stats.html` | — | 统计网格 + SVG 柱状图，完全匹配 |
+
+- **Open Design 合规专项**:
+
+| 检查项 | 状态 | 证据 |
+|--------|------|------|
+| Vercel Geist tokens | ✅ | `:root` 完整定义了 `--geist-*` + `--accents-*` 系列 |
+| HTMX CDN | ✅ | unpkg.com/htmx.org@2.0.4 |
+| 零自定义色值 | ✅ | 所有颜色通过 var() 引用，无硬编码 hex |
+| 响应式布局 | ✅ | max-width: 960px + @media 断点 |
+| 模板引擎 | ✅ | Mustache-style `{{key}}` 替换 + `{{{content}}}` 占位符 |
+| XSS 防护 | ✅ | escapeHtml 对所有用户输入转义 |
+
+- **偏离项**: **无**
+- **审查结论**: **通过。** Web 层 7 个源文件与 PLAN.md 完全一致，Open Design Vercel 设计系统正确落地，83 tests 全覆盖。可进入 T17-T19（Docker/CI/README）
+- **学到的教训**:
+  - layout.html 的 CSS 变量体系一次定义、全局复用——Web 层 template 文件中零硬编码颜色，维护性明显优于 T0-T14 的 CLI（后者 chalk 颜色散落在各命令中）
+  - Web 层测试在当前粒度（数据层集成测试）下足够有效——未做 HTTP 端到端测试（supertest）是因为所有路由逻辑的核心是 storage 查询，mock HTTP 的意义有限
+  - T16a/T16b/T16c 并行派发时采用"一个 subagent 建 pages.ts，其他只建视图"的策略成功避免了文件冲突
