@@ -55,52 +55,146 @@ async function getRepoMeta(rp: string): Promise<{ githubUrl: string; branchMap: 
   return { githubUrl, branchMap };
 }
 
+interface CommitWithStatus {
+  hash: string; author: string; date: string; message: string;
+  branch: string; hasSummary: boolean;
+  summary?: string; model?: string; risk?: string; scope?: string[];
+}
+
+async function getAllCommitsWithStatus(
+  rp: string, dbPath: string, branch?: string, maxCount: number = 200
+): Promise<CommitWithStatus[]> {
+  const sg = (await import('simple-git')).default;
+  const git = sg(rp);
+  const branchArg = (branch && branch !== '__all__') ? branch : '--all';
+  let logText = '';
+  try {
+    logText = await git.raw(['log', branchArg, '--format=%H%n%an%n%aI%n%s', `--max-count=${maxCount}`]);
+  } catch {
+    return [];
+  }
+  const lines = logText.trim().split('\n');
+  const commits: CommitWithStatus[] = [];
+  for (let i = 0; i + 3 < lines.length; i += 4) {
+    const h = lines[i]; if (!h) continue;
+    commits.push({ hash: h, author: lines[i + 1] || '', date: lines[i + 2] || '', message: lines[i + 3] || '', branch: '', hasSummary: false });
+  }
+
+  // resolve branch per commit
+  try {
+    const brs = await git.branchLocal();
+    for (const br of Object.keys(brs.branches)) {
+      const bl = await git.raw(['log', br, '--format=%H', `--max-count=${maxCount}`]);
+      for (const c of bl.trim().split('\n')) {
+        if (c) { const found = commits.find(x => x.hash === c); if (found && !found.branch) found.branch = br; }
+      }
+    }
+  } catch {}
+
+  // annotate with summary status from DB
+  if (fs.existsSync(dbPath)) {
+    await initDatabase(dbPath);
+    for (const c of commits) {
+      const s = getSummaryByHash(dbPath, rp, c.hash);
+      if (s) {
+        c.hasSummary = true;
+        c.summary = s.summary;
+        c.model = s.model;
+        c.risk = s.risk;
+        c.scope = JSON.parse(s.scope || '[]');
+      }
+    }
+    closeDatabase(dbPath);
+  }
+
+  return commits;
+}
+
+async function buildBranchBar(rp: string, activeBranch: string, searchVal: string): Promise<string> {
+  const sg = (await import('simple-git')).default;
+  let branches: string[] = [];
+  try { branches = Object.keys((await sg(rp).branchLocal()).branches); } catch {}
+  const searchQ = searchVal ? `&q=${encodeURIComponent(searchVal)}` : '';
+  let html = `<a href="/?${searchVal ? 'q=' + encodeURIComponent(searchVal) : ''}" class="branch-btn${activeBranch === '__all__' || !activeBranch ? ' active' : ''}">全部</a>`;
+  for (const br of branches) {
+    const active = activeBranch === br ? ' active' : '';
+    html += `<a href="/?branch=${encodeURIComponent(br)}${searchQ}" class="branch-btn${active}">${escapeHtml(br)}</a>`;
+  }
+  return html;
+}
+
 export function registerPageRoutes(app: Express, repoPath?: string): void {
   const rp = repoPath || process.cwd();
   const dbPath = path.join(rp, '.diffsense.db');
 
-  // ========== GET / — 列表页 ==========
+  // ========== GET / — 列表页（全部 commit + branch 筛选 + 搜索 + 分页） ==========
   app.get('/', async (req: Request, res: Response) => {
-    const { githubUrl, branchMap } = await getRepoMeta(rp);
+    const search = (req.query.q as string) || '';
+    const branch = (req.query.branch as string) || '__all__';
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = 20;
 
-    if (!fs.existsSync(dbPath)) {
-      res.send(render('list', { activeList: 'active', activeStats: '', rows: '', pagination: '<p style="text-align:center;color:var(--accents-5);">暂无摘要记录。</p>', searchVal: '', jobId: '', githubUrl, progressBar: '' }));
+    const branchBar = await buildBranchBar(rp, branch, search);
+    const commits = await getAllCommitsWithStatus(rp, dbPath, branch);
+
+    // search filter
+    let filtered = commits;
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = commits.filter(c =>
+        c.message.toLowerCase().includes(q) ||
+        (c.summary && c.summary.toLowerCase().includes(q))
+      );
+    }
+
+    // pagination
+    const total = filtered.length;
+    const offset = (page - 1) * limit;
+    const paged = filtered.slice(offset, offset + limit);
+
+    if (total === 0) {
+      res.send(render('list', {
+        activeList: 'active', activeStats: '', rows: '<p style="text-align:center;color:var(--accents-5);">暂无 commit 记录。</p>',
+        pagination: '', searchVal: escapeHtml(search), branchBar, githubUrl: '', progressBar: '',
+      }));
       return;
     }
-    await initDatabase(dbPath);
-    const page = parseInt(req.query.page as string) || 1;
-    const search = (req.query.q as string) || '';
-    const limit = 20;
-    const offset = (page - 1) * limit;
-    const summaries = getSummariesByRepo(dbPath, rp, limit, offset, search || undefined);
+
+    const { githubUrl } = await getRepoMeta(rp);
 
     let rows = '';
-    for (const s of summaries) {
-      const commit = getCommit(dbPath, rp, s.commit_hash);
-      const hash7 = s.commit_hash.substring(0, 7);
-      const date = commit ? commit.date.substring(0, 10) : 'N/A';
-      const author = escapeHtml(commit ? commit.author : 'N/A');
-      const branch = (commit?.branch) || branchMap.get(s.commit_hash) || '';
-      const branchBadge = branch ? `<span class="branch-badge" style="border-color:${branchColor(branch)};color:${branchColor(branch)};">${escapeHtml(branch)}</span>` : '';
-      let riskClass = 'risk-low';
-      if (s.risk && s.risk.includes('高')) riskClass = 'risk-high';
-      else if (s.risk && s.risk.includes('中')) riskClass = 'risk-mid';
-      const scope = JSON.parse(s.scope || '[]') as string[];
-      const scopeTags = scope.slice(0, 3).map((f: string) => `<span class="scope-mini">${escapeHtml(f.split('/').pop() || f)}</span>`).join(' ');
-      const scopeMore = scope.length > 3 ? ` <span style="color:var(--accents-5);font-size:0.7rem;">+${scope.length - 3}</span>` : '';
-      const ghLink = githubUrl ? `<a class="gh-link" href="${githubUrl}/commit/${s.commit_hash}" target="_blank" title="查看 GitHub">&#8599;</a>` : '';
+    for (const c of paged) {
+      const hash7 = c.hash.substring(0, 7);
+      const date = (c.date || '').substring(0, 10);
+      const author = escapeHtml(c.author);
+      const bc = branchColor(c.branch);
+      const branchBadge = c.branch ? `<span class="branch-badge" style="border-color:${bc};color:${bc};">${escapeHtml(c.branch)}</span>` : '';
 
-      rows += `<div class="card"><label class="card-check"><input type="checkbox" class="commit-checkbox" value="${s.commit_hash}" onchange="toggleSelect('${s.commit_hash}', this)" /></label><div class="card-body"><div class="card-top"><span class="hash">${hash7}</span> ${branchBadge} <span style="margin-left:0.25rem;font-size:0.7rem;color:var(--accents-5);">${s.model||'N/A'}</span> ${ghLink}</div><div class="summary-line"><a href="/commits/${s.commit_hash}" style="color:inherit;text-decoration:none;">${escapeHtml(s.summary)}</a></div><div class="meta">${date} &middot; ${author}${s.risk?' &middot; <span class="'+riskClass+'">'+escapeHtml(s.risk)+'</span>':''}</div>${scopeTags ? '<div style="margin-top:0.4rem;">'+scopeTags+scopeMore+'</div>' : ''}</div></div>`;
+      if (c.hasSummary && c.summary) {
+        // analyzed card
+        let riskClass = 'risk-low';
+        if (c.risk && c.risk.includes('高')) riskClass = 'risk-high';
+        else if (c.risk && c.risk.includes('中')) riskClass = 'risk-mid';
+        const scope = c.scope || [];
+        const scopeTags = scope.slice(0, 3).map((f: string) => `<span class="scope-mini">${escapeHtml((f.split('/').pop() || f))}</span>`).join(' ');
+        const scopeMore = scope.length > 3 ? ` <span style="color:var(--accents-5);font-size:0.7rem;">+${scope.length - 3}</span>` : '';
+        const ghLink = githubUrl ? `<a class="gh-link" href="${githubUrl}/commit/${c.hash}" target="_blank">&#8599;</a>` : '';
+
+        rows += `<div class="card card-analyzed" style="border-left:3px solid ${bc};"><div class="card-body"><div class="card-top"><span class="hash">${hash7}</span> ${branchBadge} <span style="margin-left:0.25rem;font-size:0.7rem;color:var(--accents-5);">${c.model||'N/A'}</span> ${ghLink} <span class="status-badge analyzed">已分析</span></div><div class="summary-line"><a href="/commits/${c.hash}" style="color:inherit;text-decoration:none;">${escapeHtml(c.summary)}</a></div><div class="meta">${date} &middot; ${author}${c.risk?' &middot; <span class="'+riskClass+'">'+escapeHtml(c.risk)+'</span>':''}</div>${scopeTags ? '<div style="margin-top:0.4rem;">'+scopeTags+scopeMore+'</div>' : ''}</div></div>`;
+      } else {
+        // unanalyzed card — has checkbox
+        rows += `<div class="card card-unanalyzed" style="border-left:3px solid ${bc};opacity:0.75;"><label class="card-check"><input type="checkbox" class="commit-checkbox" value="${c.hash}" onchange="toggleSelect('${c.hash}', this)" /></label><div class="card-body"><div class="card-top"><span class="hash">${hash7}</span> ${branchBadge} <span class="status-badge unanalyzed">未分析</span></div><div class="summary-line" style="color:var(--accents-5);">${escapeHtml(c.message)}</div><div class="meta">${date} &middot; ${author}</div></div></div>`;
+      }
     }
-    if (!rows) rows = '<p style="text-align:center;color:var(--accents-5);">暂无匹配的摘要记录。</p>';
 
-    const pagination = summaries.length === limit
-      ? `<div class="pagination"><a class="btn btn-secondary" href="/?q=${encodeURIComponent(search)}&page=${page+1}">加载更多</a></div>`
+    const hasMore = offset + limit < total;
+    const pagination = hasMore
+      ? `<div class="pagination"><a class="btn btn-secondary" href="/?branch=${encodeURIComponent(branch)}&q=${encodeURIComponent(search)}&page=${page + 1}">加载更多（${total - offset - limit} 条剩余）</a></div>`
       : '';
-    closeDatabase(dbPath);
+
     res.send(render('list', {
       activeList: 'active', activeStats: '', rows, pagination,
-      searchVal: escapeHtml(search), jobId: '', githubUrl, progressBar: '',
+      searchVal: escapeHtml(search), branchBar, githubUrl, progressBar: '',
     }));
   });
 
@@ -119,16 +213,46 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
     else if (summary.risk && summary.risk.includes('中')) riskClass = 'risk-mid';
     const truncatedWarning = summary.truncated ? '<p style="color:var(--geist-error);">⚠ 该文件变更过大，摘要可能不完整</p>' : '';
 
-    // fetch diff snippet
-    let diffSnippet = '';
+    // fetch file change list (status + path + line counts)
+    interface FileChange { status: string; path: string; added: number; deleted: number; }
+    let fileChanges: FileChange[] = [];
     try {
       const sg = (await import('simple-git')).default;
-      let diffText = '';
-      try { diffText = await sg(rp).raw(['diff', `${hash}^..${hash}`]); }
-      catch { diffText = await sg(rp).raw(['show', hash]); }
-      diffSnippet = diffText.split('\n').slice(0, 30).map(s => escapeHtml(s)).join('<br>');
-      if (diffText.split('\n').length > 30) diffSnippet += '<br><span style="color:var(--accents-5);">... 更多内容已截断</span>';
+      const git = sg(rp);
+      let nameStatusOut = '';
+      let numstatOut = '';
+      try {
+        nameStatusOut = await git.raw(['diff', '--name-status', `${hash}^..${hash}`]);
+        numstatOut = await git.raw(['diff', '--numstat', `${hash}^..${hash}`]);
+      } catch {
+        // initial commit (no parent): use git show instead
+        try {
+          nameStatusOut = await git.raw(['show', '--diff-filter=A', '--name-status', '--format=', hash]);
+          numstatOut = await git.raw(['show', '--numstat', '--format=', hash]);
+        } catch {}
+      }
+      const nameLines = nameStatusOut.trim().split('\n').filter(l => l.trim());
+      const numLines = numstatOut.trim().split('\n').filter(l => l.trim());
+      for (let i = 0; i < nameLines.length; i++) {
+        const parts = nameLines[i].split('\t');
+        const status = parts[0] || 'M';
+        const fpath = parts.slice(1).join('\t');
+        const numParts = (numLines[i] || '').split('\t');
+        fileChanges.push({
+          status,
+          path: fpath,
+          added: parseInt(numParts[0]) || 0,
+          deleted: parseInt(numParts[1]) || 0,
+        });
+      }
     } catch {}
+
+    const fileChangeHtml = fileChanges.length
+      ? fileChanges.map(f => {
+          const cls = f.status === 'A' ? 'file-add' : f.status === 'D' ? 'file-del' : f.status === 'R' ? 'file-rename' : 'file-mod';
+          return `<div class="file-change-item ${cls}"><span class="file-status">${escapeHtml(f.status)}</span><span class="file-path">${escapeHtml(f.path)}</span><span class="file-stats">+${f.added} -${f.deleted}</span></div>`;
+        }).join('')
+      : '<p style="color:var(--accents-5);padding:0.75rem;">无文件变更</p>';
 
     let githubUrl = '';
     try {
@@ -149,7 +273,7 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
       summary: escapeHtml(summary.summary), intent: escapeHtml(summary.intent || ''), scopeTags: scopeTags || '无',
       risk: escapeHtml(summary.risk || 'N/A'), riskClass, truncatedWarning,
       model: summary.model || 'N/A', tokensUsed: String(summary.tokens_used || 'N/A'),
-      diffSnippet: diffSnippet || '<p style="color:var(--accents-5);">无法获取 diff</p>',
+      fileChanges: fileChangeHtml,
       ghLink,
     }));
   });

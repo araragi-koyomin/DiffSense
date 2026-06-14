@@ -1,0 +1,11 @@
+services:
+  diffsense:
+    image: ghcr.io/araragi-koyomin/diffsense:latest
+    container_name: diffsense
+    ports:
+      - '9090:3000'
+    volumes:
+      - .:/repo
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    command: web -r /repo
