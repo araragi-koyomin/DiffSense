@@ -3,12 +3,12 @@ import * as fs from 'fs'; import * as path from 'path';
 import { registerPageRoutes } from './routes/pages';
 import { registerApiRoutes } from './routes/api';
 
-export async function startWebServer(port: number): Promise<void> {
+export async function startWebServer(port: number, repoPath?: string): Promise<void> {
   const app = express();
   app.use(express.json());
 
-  registerApiRoutes(app);
-  registerPageRoutes(app);
+  registerApiRoutes(app, repoPath);
+  registerPageRoutes(app, repoPath);
 
   let cp = port;
   for (let i = 0; i < 3; i++) {
