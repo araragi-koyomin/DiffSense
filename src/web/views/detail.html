@@ -1,0 +1,24 @@
+<div class="card">
+  <h2 style="margin-bottom:0.5rem;"><span class="hash">{{fullHash}}</span></h2>
+  <div class="meta">{{author}} &middot; {{date}} &middot; {{model}}</div>
+  <p style="margin:0.75rem 0;color:var(--accents-5);"><strong>原始消息:</strong> {{message}}</p>
+  {{{truncatedWarning}}}
+  <div style="margin:1.25rem 0;">
+    <h3 style="margin-bottom:0.25rem;">📝 摘要</h3>
+    <p>{{summary}}</p>
+  </div>
+  <div style="margin:1.25rem 0;">
+    <h3 style="margin-bottom:0.25rem;">🎯 意图</h3>
+    <p>{{intent}}</p>
+  </div>
+  <div style="margin:1.25rem 0;">
+    <h3 style="margin-bottom:0.25rem;">📂 影响范围</h3>
+    <div style="margin-top:0.25rem;">{{{scopeTags}}}</div>
+  </div>
+  <div style="margin:1.25rem 0;">
+    <h3 style="margin-bottom:0.25rem;">⚠️ 风险</h3>
+    <p><span class="{{riskClass}}">{{risk}}</span></p>
+  </div>
+  <p style="margin-top:1rem;font-size:0.8rem;color:var(--accents-5);">Token 消耗: {{tokensUsed}}</p>
+</div>
+<p style="margin-top:1rem;"><a href="/" class="btn btn-secondary">&larr; 返回列表</a></p>
