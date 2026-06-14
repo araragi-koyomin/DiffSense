@@ -276,3 +276,23 @@
   - SPEC_PROCESS.md 应在 brainstorming 结束后立即补充，而非等到冷启动验证完成之后——时间间隔导致细节需要通过 AGENT_LOG.md 简表反推
   - 反思章节（§5）是最有价值的部分，因为它迫使我抽象思考"这个过程为什么有效/无效"，而不仅仅记录"做了什么"
   - brainstorming 的"逐模块签字确认"机制在实施层面有效，但在设计层面缺少"外部约束感知"——Open Design 约束是用户手动注入的而非智能体主动发现的
+
+---
+
+## [2026-06-14] Phase 5: 正式实现准备
+
+### 条目 #10 — V0 清理 + Worktree 创建
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `using-git-worktrees`
+- **操作**:
+  1. 清理 V0 临时产物: 删除 tsconfig.json / vitest.config.ts / src/core/types.ts / tests/core/types.test.ts / package.json / package-lock.json / node_modules/
+  2. `.aider*` 已在 .gitignore 中（无需额外操作）
+  3. 添加 `.worktrees/` 到 .gitignore
+  4. 创建隔离工作区: `git worktree add .worktrees/core-engine -b feat/core-engine`
+- **Worktree 状态**:
+  - 路径: `.worktrees/core-engine`
+  - 分支: `feat/core-engine`
+  - 基线: package.json 不存在（待 T0 创建），npm test 预期失败（无测试文件）
+- **人工干预**: 无
+- **学到的教训**: 冷启动验证后立即清理是明智的——Aider 产物与正式 T0 实现无关联，保留会造成混淆
