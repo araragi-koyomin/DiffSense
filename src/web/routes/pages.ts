@@ -213,16 +213,46 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
     else if (summary.risk && summary.risk.includes('中')) riskClass = 'risk-mid';
     const truncatedWarning = summary.truncated ? '<p style="color:var(--geist-error);">⚠ 该文件变更过大，摘要可能不完整</p>' : '';
 
-    // fetch diff snippet
-    let diffSnippet = '';
+    // fetch file change list (status + path + line counts)
+    interface FileChange { status: string; path: string; added: number; deleted: number; }
+    let fileChanges: FileChange[] = [];
     try {
       const sg = (await import('simple-git')).default;
-      let diffText = '';
-      try { diffText = await sg(rp).raw(['diff', `${hash}^..${hash}`]); }
-      catch { diffText = await sg(rp).raw(['show', hash]); }
-      diffSnippet = diffText.split('\n').slice(0, 30).map(s => escapeHtml(s)).join('<br>');
-      if (diffText.split('\n').length > 30) diffSnippet += '<br><span style="color:var(--accents-5);">... 更多内容已截断</span>';
+      const git = sg(rp);
+      let nameStatusOut = '';
+      let numstatOut = '';
+      try {
+        nameStatusOut = await git.raw(['diff', '--name-status', `${hash}^..${hash}`]);
+        numstatOut = await git.raw(['diff', '--numstat', `${hash}^..${hash}`]);
+      } catch {
+        // initial commit (no parent): use git show instead
+        try {
+          nameStatusOut = await git.raw(['show', '--diff-filter=A', '--name-status', '--format=', hash]);
+          numstatOut = await git.raw(['show', '--numstat', '--format=', hash]);
+        } catch {}
+      }
+      const nameLines = nameStatusOut.trim().split('\n').filter(l => l.trim());
+      const numLines = numstatOut.trim().split('\n').filter(l => l.trim());
+      for (let i = 0; i < nameLines.length; i++) {
+        const parts = nameLines[i].split('\t');
+        const status = parts[0] || 'M';
+        const fpath = parts.slice(1).join('\t');
+        const numParts = (numLines[i] || '').split('\t');
+        fileChanges.push({
+          status,
+          path: fpath,
+          added: parseInt(numParts[0]) || 0,
+          deleted: parseInt(numParts[1]) || 0,
+        });
+      }
     } catch {}
+
+    const fileChangeHtml = fileChanges.length
+      ? fileChanges.map(f => {
+          const cls = f.status === 'A' ? 'file-add' : f.status === 'D' ? 'file-del' : f.status === 'R' ? 'file-rename' : 'file-mod';
+          return `<div class="file-change-item ${cls}"><span class="file-status">${escapeHtml(f.status)}</span><span class="file-path">${escapeHtml(f.path)}</span><span class="file-stats">+${f.added} -${f.deleted}</span></div>`;
+        }).join('')
+      : '<p style="color:var(--accents-5);padding:0.75rem;">无文件变更</p>';
 
     let githubUrl = '';
     try {
@@ -243,7 +273,7 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
       summary: escapeHtml(summary.summary), intent: escapeHtml(summary.intent || ''), scopeTags: scopeTags || '无',
       risk: escapeHtml(summary.risk || 'N/A'), riskClass, truncatedWarning,
       model: summary.model || 'N/A', tokensUsed: String(summary.tokens_used || 'N/A'),
-      diffSnippet: diffSnippet || '<p style="color:var(--accents-5);">无法获取 diff</p>',
+      fileChanges: fileChangeHtml,
       ghLink,
     }));
   });

@@ -74,6 +74,16 @@
     .status-badge.analyzed { background:#e6f4ea; color:#007c40; }
     .status-badge.unanalyzed { background:var(--accents-1); color:var(--accents-5); }
     footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--accents-2); font-size:0.8rem; color:var(--accents-5); text-align:center; }
+    .file-change-list { border:1px solid var(--accents-2); border-radius:var(--geist-radius); overflow:hidden; }
+    .file-change-item { display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.75rem; font-family:var(--font-mono); font-size:0.8rem; border-bottom:1px solid var(--accents-1); }
+    .file-change-item:last-child { border-bottom:none; }
+    .file-status { width:1.2rem; text-align:center; font-weight:600; font-size:0.75rem; }
+    .file-add .file-status { color:#007c40; }
+    .file-del .file-status { color:var(--geist-error); }
+    .file-rename .file-status { color:#d4a111; }
+    .file-mod .file-status { color:var(--accents-5); }
+    .file-path { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .file-stats { color:var(--accents-5); font-size:0.75rem; white-space:nowrap; }
     @media (max-width:640px) { body { padding:1rem; } }
   </style>
 </head>
