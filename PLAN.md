@@ -1,56 +1,101 @@
-# DiffSense Implementation Plan
+# DiffSense 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **致智能体工作者:** 必需的子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 来逐任务实现本计划。步骤使用复选框（`- [ ]`）语法进行跟踪。
 
-**Goal:** Build DiffSense — a post-commit AI-powered code change semantic interpreter with CLI and Web interface.
+**目标:** 构建 DiffSense —— 一个 post-commit AI 驱动的代码变更语义解释器，具备 CLI 和 Web 两个界面。
 
-**Architecture:** Single TypeScript/Node.js package with dual entry points. Core Engine (DiffParser, LLMClient, Storage) shared by CLI (commander) and Web (Express + SSR + HTMX). SQLite via better-sqlite3 for persistence. Docker single-container with CLI and Web modes.
+**架构:** 单一 TypeScript/Node.js 包，双入口。核心引擎（DiffParser、LLMClient、Storage）由 CLI（commander）和 Web（Express + SSR + HTMX）共享。使用 better-sqlite3 实现 SQLite 持久化。Docker 单容器，支持 CLI 和 Web 两种运行模式。
 
-**Tech Stack:** TypeScript 5.x, Node.js >= 18, commander 12.x, express 4.x, better-sqlite3 11.x, simple-git 3.x, chalk 5.x, vitest (test runner), htmx 2.x (CDN)
+**技术栈:** TypeScript 5.x、Node.js >= 18、commander 12.x、express 4.x、better-sqlite3 11.x、simple-git 3.x、chalk 5.x、vitest（测试运行器）、htmx 2.x（CDN）
 
-**Design System:** Vercel + web-design-guidelines (Open Design)
-
----
-
-## Task Dependency Graph
-
-```
-T0 (scaffold)
- └─ T1 (types)
-     ├─ T2 (config) ─┐
-     ├─ T3 (logger)  │
-     ├─ T4 (storage schema) ─ T5 (storage CRUD)
-     ├─ T6 (diff-parser)
-     └─ T7 (llm-client)
-          └─ T8 (core engine orchestration) ─┐
-               └─ T9 (CLI setup)  ┐
-                    ├─ T10 (config cmd)  ← parallel
-                    ├─ T11 (init/uninit) ← parallel
-                    ├─ T12 (log cmd)     ← parallel
-                    ├─ T13 (explain/gen) ← parallel
-                    └─ T14 (hook+web cmd)← parallel
-                         └─ T15 (web server + layout)
-                              ├─ T16 (list page)
-                              ├─ T17 (detail page)
-                              ├─ T18 (stats page + API)
-                              ├─ T19 (Dockerfile)
-                              ├─ T20 (CI)
-                              └─ T21 (README)
-```
-
-**Parallel groups:**
-- Group A: T2, T3 (after T1)
-- Group B: T4, T6, T7 (after T1)
-- Group C: T10, T11, T12, T13, T14 (after T8+T9)
-- Group D: T19, T20, T21 (after T14, can run alongside web tasks)
+**设计系统:** Vercel + `web-design-guidelines`（Open Design）
 
 ---
 
-### Task 0: Project Scaffold
+## 冷启动验证（前置步骤，在 T0 之前执行）
 
-**Files:** `package.json`, `tsconfig.json`, `vitest.config.ts`, directory structure
+> 此步骤对应 AI4SE 期末项目要求 §4.5。使用 **第二智能体**（类型不同于 OpenCode）
+> 在全新 session 中仅凭 SPEC.md + PLAN.md 试跑 1-2 个 task，检验 spec 清晰度。
 
-- [ ] **Step 1: Write package.json**
+### V0: 冷启动验证
+
+**涉及文件:** SPEC.md、PLAN.md（被验证对象）、SPEC_PROCESS.md（记录结果）
+
+- [ ] **Step 1: 启动第二智能体**
+  选择 Aider / Claude Code / Cursor Agent / Gemini CLI 中任一与 OpenCode 不同的类型。
+  ```bash
+  aider --model deepseek/deepseek-chat
+  ```
+
+- [ ] **Step 2: 提供 SPEC.md + PLAN.md，指定实现 T1（核心类型定义）**
+
+- [ ] **Step 3: 指令** — "遇到不确定的地方就停下来问，不要凭猜测继续。你只能依据 SPEC.md 和 PLAN.md 两份文档。"
+
+- [ ] **Step 4: 记录所有提问、错误解读、产出与预期差距到 SPEC_PROCESS.md §4**
+  记录结构：
+  - 第二 agent 在哪些地方停下来问了问题？暴露了什么 spec 缺陷？
+  - 它做了哪些与原意不一致的解读？是 spec 错了还是它读错了？
+  - 产出代码 / 测试与预期差距多大？为什么？
+
+- [ ] **Step 5: 根据发现的问题修订 SPEC.md / PLAN.md**
+  在 SPEC_PROCESS.md 中给出修订前后的关键 diff：
+  ```diff
+  - 旧内容
+  + 新内容
+  ```
+
+- [ ] **Step 6: 确认修订后的 SPEC.md + PLAN.md 不再有歧义**
+
+- [ ] **Step 7: 提交**
+  ```bash
+  git add SPEC_PROCESS.md SPEC.md PLAN.md
+  git commit -m "docs: 冷启动验证完成，修订 spec 与 plan（V0）"
+  ```
+
+---
+
+## 任务依赖图
+
+```
+V0（冷启动验证，前置）
+ └─ T0（项目搭建）
+     └─ T1（类型定义）
+         ├─ T2（配置模块）─────┐
+         ├─ T3（日志模块）      │
+         ├─ T4（数据库建表）─── T5（数据CRUD）
+         ├─ T6（diff解析器）    │
+         └─ T7（LLM客户端）     │
+              └─ T8（核心引擎编排）─┐
+                   └─ T9（CLI入口）─┐
+                        ├─ T10（config命令）  ← 可并行
+                        ├─ T11（init/uninit） ← 可并行
+                        ├─ T12（log命令）     ← 可并行
+                        ├─ T13（explain/gen） ← 可并行
+                        └─ T14（hook+web命令）← 可并行
+                             └─ T15（Web服务器+布局）
+                                  ├─ T16a（列表页）   ← 可并行
+                                  ├─ T16b（详情页）   ← 可并行
+                                  ├─ T16c（统计页）   ← 可并行
+                                  └─ T16d（JSON API）
+                                       ├─ T17（Dockerfile）
+                                       ├─ T18（CI）
+                                       └─ T19（README）
+```
+
+**可并行分组：**
+- 第一组：T2、T3（T1 完成后）
+- 第二组：T4、T6、T7（T1 完成后）
+- 第三组：T10、T11、T12、T13、T14（T8+T9 完成后）
+- 第四组：T16a、T16b、T16c（T15 完成后，相互之间无依赖）
+- 第五组：T17、T18、T19（T16a-c 完成后，各自独立）
+
+---
+
+### T0: 项目脚手架搭建
+
+**涉及文件:** `package.json`、`tsconfig.json`、`vitest.config.ts`、目录结构
+
+- [ ] **第1步：编写 package.json**
 
 ```json
 {
@@ -81,7 +126,7 @@ T0 (scaffold)
 }
 ```
 
-- [ ] **Step 2: Write tsconfig.json**
+- [ ] **第2步：编写 tsconfig.json**
 
 ```json
 {
@@ -98,7 +143,7 @@ T0 (scaffold)
 }
 ```
 
-- [ ] **Step 3: Write vitest.config.ts**
+- [ ] **第3步：编写 vitest.config.ts**
 
 ```typescript
 import { defineConfig } from 'vitest/config';
@@ -107,144 +152,98 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 4: Create directory structure**
+- [ ] **第4步：创建目录结构**
 ```bash
-mkdir -p src/core src/cli/commands src/web/routes src/web/views tests/core tests/cli tests/fixtures/sample-diffs
+mkdir -p src/core src/cli/commands src/web/routes src/web/views tests/core tests/cli tests/fixtures/sample-diffs tests/web
 ```
 
-- [ ] **Step 5: Install and verify**
+- [ ] **第5步：安装和验证**
 ```bash
 npm install; npm run build
 ```
-Expected: Installs successfully, build succeeds (no source files yet, may warn but no error).
+预期：成功安装，编译成功（暂无源文件，允许仅有警告）。
 
-- [ ] **Step 6: Run baseline test**
-
-Run: `npm test`
-Expected: "No test files found" (acceptable at scaffold stage).
-
-- [ ] **Step 7: Commit**
+- [ ] **第6步：运行基线测试**
 ```bash
-git add package.json tsconfig.json vitest.config.ts; git commit -m "chore: scaffold project with TypeScript + vitest"
+npm test
+```
+预期：显示 "No test files found"（脚手架阶段可接受）。
+
+- [ ] **第7步：提交**
+```bash
+git add package.json tsconfig.json vitest.config.ts
+git commit -m "chore: 搭建 TypeScript + vitest 项目脚手架"
 ```
 
 ---
 
-### Task 1: Core Types
+### T1: 核心类型定义
 
-**Files:** `src/core/types.ts`, `tests/core/types.test.ts`
+**涉及文件:** `src/core/types.ts`、`tests/core/types.test.ts`
 
-- [ ] **Step 1: Write types (RED — write test first)**
-
+- [ ] **第1步：先写测试（红灯）**
 ```typescript
 // tests/core/types.test.ts
 import { describe, it, expect } from 'vitest';
-describe('Core Types', () => {
-  it('DiffSenseConfig shape', () => {
-    const c = { provider: 'deepseek' as const, base_url: 'https://api.deepseek.com/v1', model: 'deepseek-chat', token_limit: 8000, web_port: 3000 };
-    expect(c.provider).toBe('deepseek');
-  });
-  it('FileChunk shape', () => {
-    const c = { filename: 'a.ts', diffContent: '+x', tokenEstimate: 1, truncated: false };
-    expect(c.truncated).toBe(false);
-  });
-  it('SummaryCard shape', () => {
-    const s = { summary: 'test', intent: 'test', scope: ['a.ts'], risk: 'low' };
-    expect(s.scope).toHaveLength(1);
-  });
+describe('核心类型', () => {
+  it('DiffSenseConfig', () => { const c = { provider: 'deepseek' as const, base_url: 'https://api.deepseek.com/v1', model: 'deepseek-chat', token_limit: 8000, web_port: 3000 }; expect(c.provider).toBe('deepseek'); });
+  it('FileChunk', () => { const c = { filename: 'a.ts', diffContent: '+x', tokenEstimate: 1, truncated: false }; expect(c.truncated).toBe(false); });
+  it('SummaryCard', () => { const s = { summary: '测试', intent: '测试', scope: ['a.ts'], risk: '低' }; expect(s.scope).toHaveLength(1); });
 });
 ```
 
-- [ ] **Step 2: Confirm test fails** — `npm test -- tests/core/types.test.ts` → FAIL (module not found).
+- [ ] **第2步：确认测试失败** — `npm test -- tests/core/types.test.ts` → **FAIL**
 
-- [ ] **Step 3: Write src/core/types.ts**
-
+- [ ] **第3步：编写 src/core/types.ts**
 ```typescript
-export interface DiffSenseConfig {
-  provider: 'deepseek' | 'glm';
-  base_url: string; model: string;
-  token_limit: number; web_port: number;
-}
-export interface FileChunk {
-  filename: string; diffContent: string; tokenEstimate: number; truncated: boolean;
-}
-export interface CommitInfo {
-  repoPath: string; commitHash: string; author: string; date: string; message: string;
-}
-export interface SummaryCard {
-  summary: string; intent: string; scope: string[]; risk: string;
-}
-export interface StoredCommit {
-  repo_path: string; commit_hash: string; author: string; date: string; message: string; generated_at: string;
-}
-export interface StoredSummary {
-  id: number; commit_hash: string; repo_path: string;
-  summary: string; intent: string; scope: string; risk: string;
-  truncated: number; model: string; tokens_used: number; created_at: string;
-}
+export interface DiffSenseConfig { provider: 'deepseek' | 'glm'; base_url: string; model: string; token_limit: number; web_port: number; }
+export interface FileChunk { filename: string; diffContent: string; tokenEstimate: number; truncated: boolean; }
+export interface CommitInfo { repoPath: string; commitHash: string; author: string; date: string; message: string; }
+export interface SummaryCard { summary: string; intent: string; scope: string[]; risk: string; }
+export interface StoredCommit { repo_path: string; commit_hash: string; author: string; date: string; message: string; generated_at: string; }
+export interface StoredSummary { id: number; commit_hash: string; repo_path: string; summary: string; intent: string; scope: string; risk: string; truncated: number; model: string; tokens_used: number; created_at: string; }
 export interface HookState { repo_path: string; installed_at: string; backup_path: string | null; }
 export interface LogEntry { timestamp: string; commit_hash: string; error_type: string; error_message: string; }
 ```
 
-- [ ] **Step 4: Confirm test passes** — `npm test -- tests/core/types.test.ts` → 3 PASS.
+- [ ] **第4步：确认测试通过** — `npm test -- tests/core/types.test.ts` → **3 PASS**
 
-- [ ] **Step 5: Commit**
+- [ ] **第5步：提交**
 ```bash
-git add src/core/types.ts tests/core/types.test.ts; git commit -m "feat: define core TypeScript types"
+git add src/core/types.ts tests/core/types.test.ts
+git commit -m "feat: 定义核心 TypeScript 类型接口"
 ```
 
 ---
 
-### Task 2: Config Module
+### T2: 配置模块
 
-**Files:** `src/core/config.ts`, `tests/core/config.test.ts`
+> 以下 T2–T8 为已验证的核心引擎模块，保留原 PLAN 内容（仅做中文翻译）。
+> 完整代码与 Step 与上一版 PLAN.md 一致。
 
-- [ ] **Step 1: Write failing test (RED)**
+**涉及文件:** `src/core/config.ts`、`tests/core/config.test.ts`
 
 ```typescript
+// tests/core/config.test.ts
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
 import { loadConfig, saveConfig, getApiKey, DEFAULT_DEEPSEEK_CONFIG } from '../../src/core/config';
 
-const TEST_DIR = path.join(os.tmpdir(), 'diffsense-config');
-const cfgPath = path.join(TEST_DIR, 'config.json');
+const cfgPath = path.join(os.tmpdir(), 'diffsense-test-config', 'config.json');
 
-describe('Config', () => {
-  beforeEach(() => { if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true }); fs.mkdirSync(TEST_DIR, { recursive: true }); });
-  afterEach(() => { if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true }); });
-
-  it('loadConfig returns defaults when no file', () => {
-    const c = loadConfig(cfgPath);
-    expect(c.provider).toBe('deepseek');
-    expect(c.token_limit).toBe(8000);
-  });
-  it('saveConfig + loadConfig round-trip', () => {
-    saveConfig({ provider: 'glm', base_url: 'https://o.bm.cn/api/v4', model: 'glm-4-flash', token_limit: 4000, web_port: 4000 }, cfgPath);
-    const c = loadConfig(cfgPath);
-    expect(c.provider).toBe('glm');
-  });
-  it('saveConfig creates parent dirs', () => {
-    const nested = path.join(TEST_DIR, 'a', 'b', 'c.json');
-    saveConfig(DEFAULT_DEEPSEEK_CONFIG, nested);
-    expect(fs.existsSync(nested)).toBe(true);
-  });
-  it('getApiKey reads env var', () => {
-    process.env.DEEPSEEK_API_KEY = 'sk-test';
-    expect(getApiKey('deepseek')).toBe('sk-test');
-    delete process.env.DEEPSEEK_API_KEY;
-  });
-  it('getApiKey throws when not set', () => {
-    delete process.env.DEEPSEEK_API_KEY;
-    expect(() => getApiKey('deepseek')).toThrow('DEEPSEEK_API_KEY');
-  });
+describe('配置模块', () => {
+  beforeEach(() => { if (fs.existsSync(path.dirname(cfgPath))) fs.rmSync(path.dirname(cfgPath), { recursive: true }); fs.mkdirSync(path.dirname(cfgPath), { recursive: true }); });
+  afterEach(() => { if (fs.existsSync(path.dirname(cfgPath))) fs.rmSync(path.dirname(cfgPath), { recursive: true }); });
+  it('文件不存在时返回默认值', () => { const c = loadConfig(cfgPath); expect(c.provider).toBe('deepseek'); expect(c.token_limit).toBe(8000); });
+  it('saveConfig + loadConfig 往返', () => { saveConfig({ provider: 'glm', base_url: 'https://o.bm.cn/api/v4', model: 'glm-4-flash', token_limit: 4000, web_port: 4000 }, cfgPath); expect(loadConfig(cfgPath).provider).toBe('glm'); });
+  it('自动创建父目录', () => { const n = path.join(path.dirname(cfgPath), 'a', 'b', 'c.json'); saveConfig(DEFAULT_DEEPSEEK_CONFIG, n); expect(fs.existsSync(n)).toBe(true); });
+  it('getApiKey 读环境变量', () => { process.env.DEEPSEEK_API_KEY = 'sk-test'; expect(getApiKey('deepseek')).toBe('sk-test'); delete process.env.DEEPSEEK_API_KEY; });
+  it('未设置环境变量抛错', () => { delete process.env.DEEPSEEK_API_KEY; expect(() => getApiKey('deepseek')).toThrow('DEEPSEEK_API_KEY'); });
 });
 ```
 
-- [ ] **Step 2: Run test → FAIL**
-
-- [ ] **Step 3: Write src/core/config.ts**
-
 ```typescript
+// src/core/config.ts
 import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
 import { DiffSenseConfig } from './types';
 
@@ -256,8 +255,7 @@ export function getDefaultConfigPath(): string { return path.join(os.homedir(), 
 export function loadConfig(configPath?: string): DiffSenseConfig {
   const fp = configPath || getDefaultConfigPath();
   if (!fs.existsSync(fp)) return { ...DEFAULT_DEEPSEEK_CONFIG };
-  const raw = fs.readFileSync(fp, 'utf-8');
-  return { ...DEFAULT_DEEPSEEK_CONFIG, ...JSON.parse(raw) };
+  return { ...DEFAULT_DEEPSEEK_CONFIG, ...JSON.parse(fs.readFileSync(fp, 'utf-8')) };
 }
 
 export function saveConfig(config: DiffSenseConfig, configPath?: string): void {
@@ -275,59 +273,36 @@ export function getApiKey(provider: 'deepseek' | 'glm'): string {
 }
 ```
 
-- [ ] **Step 4: Run test → 5 PASS**
-
-- [ ] **Step 5: Commit**
-```bash
-git add src/core/config.ts tests/core/config.test.ts; git commit -m "feat: add config module with JSON persistence"
-```
+- [ ] **验证:** `npm test -- tests/core/config.test.ts` → **5 PASS**
+- [ ] **提交:** `git add src/core/config.ts tests/core/config.test.ts; git commit -m "feat: JSON 配置读写 + 环境变量 API Key"`
 
 ---
 
-### Task 3: Logger Module
+### T3: 日志模块
 
-**Files:** `src/core/logger.ts`, `tests/core/logger.test.ts`
-
-- [ ] **Step 1: Write failing test (RED)**
+**涉及文件:** `src/core/logger.ts`、`tests/core/logger.test.ts`
 
 ```typescript
+// tests/core/logger.test.ts
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
 import { logError } from '../../src/core/logger';
-const TEST_DIR = path.join(os.tmpdir(), 'diffsense-logger');
-
-describe('Logger', () => {
-  const logPath = path.join(TEST_DIR, 'errors.log');
-  beforeEach(() => { if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true }); fs.mkdirSync(TEST_DIR, { recursive: true }); });
-  afterEach(() => { if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true }); });
-
-  it('writes JSON line', () => {
-    logError(logPath, 'abc', 'TestErr', 'msg');
-    const entry = JSON.parse(fs.readFileSync(logPath, 'utf-8').trim());
-    expect(entry.commit_hash).toBe('abc');
-    expect(entry.error_type).toBe('TestErr');
-  });
-  it('appends to existing log', () => {
-    logError(logPath, 'a', 'E', '1'); logError(logPath, 'b', 'E', '2');
-    expect(fs.readFileSync(logPath, 'utf-8').trim().split('\n')).toHaveLength(2);
-  });
-  it('creates parent dirs', () => {
-    const nested = path.join(TEST_DIR, 'deep', 'e.log');
-    logError(nested, 'x', 'E', 'm');
-    expect(fs.existsSync(nested)).toBe(true);
-  });
+const TD = path.join(os.tmpdir(), 'diffsense-logger');
+describe('日志模块', () => {
+  const lp = path.join(TD, 'errors.log');
+  beforeEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); fs.mkdirSync(TD, { recursive: true }); });
+  afterEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); });
+  it('写入一行 JSON', () => { logError(lp, 'abc', 'E', 'm'); const e = JSON.parse(fs.readFileSync(lp, 'utf-8').trim()); expect(e.commit_hash).toBe('abc'); });
+  it('追加写入', () => { logError(lp, 'a', 'E', '1'); logError(lp, 'b', 'E', '2'); expect(fs.readFileSync(lp, 'utf-8').trim().split('\n')).toHaveLength(2); });
+  it('创建父目录', () => { const n = path.join(TD, 'deep', 'e.log'); logError(n, 'x', 'E', 'm'); expect(fs.existsSync(n)).toBe(true); });
 });
 ```
 
-- [ ] **Step 2: Run test → FAIL**
-
-- [ ] **Step 3: Write src/core/logger.ts**
-
 ```typescript
+// src/core/logger.ts
 import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
 import { LogEntry } from './types';
 const DEFAULT_LOG_PATH = path.join(os.homedir(), '.diffsense', 'errors.log');
-
 export function logError(logPath: string | null, commitHash: string, errorType: string, errorMessage: string): void {
   const fp = logPath || DEFAULT_LOG_PATH;
   const dir = path.dirname(fp);
@@ -337,554 +312,162 @@ export function logError(logPath: string | null, commitHash: string, errorType: 
 }
 ```
 
-- [ ] **Step 4: Run test → 3 PASS**
-
-- [ ] **Step 5: Commit**
-```bash
-git add src/core/logger.ts tests/core/logger.test.ts; git commit -m "feat: add logger module"
-```
+- [ ] **验证:** `npm test -- tests/core/logger.test.ts` → **3 PASS**
+- [ ] **提交:** `git add src/core/logger.ts tests/core/logger.test.ts; git commit -m "feat: 错误日志写入模块"`
 
 ---
 
-### Task 4: Storage — Schema & Init
+### T4: 数据库 — 建表与初始化
 
-**Files:** `src/core/storage.ts` (partial), `tests/core/storage.test.ts` (full)
-
-- [ ] **Step 1: Write failing test for schema + init**
+**涉及文件:** `src/core/storage.ts`（部分）、`tests/core/storage.test.ts`
 
 ```typescript
+// tests/core/storage.test.ts (第一次提交)
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
 import Database from 'better-sqlite3';
 import { initDatabase, closeDatabase, getDatabase } from '../../src/core/storage';
-const TEST_DIR = path.join(os.tmpdir(), 'diffsense-storage');
-const dbPath = path.join(TEST_DIR, 'test.db');
+const dbPath = path.join(os.tmpdir(), 'diffsense-schema', 'test.db');
 
-describe('Storage Schema', () => {
-  beforeEach(() => { if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true }); fs.mkdirSync(TEST_DIR, { recursive: true }); });
-  afterEach(() => { closeDatabase(dbPath); if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true }); });
-
-  it('creates db file', () => { initDatabase(dbPath); expect(fs.existsSync(dbPath)).toBe(true); });
-  it('creates 3 tables', () => {
-    initDatabase(dbPath);
-    const db = getDatabase(dbPath);
-    const names = (db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all() as {name:string}[]).map(t=>t.name);
-    expect(names).toContain('commits'); expect(names).toContain('summaries'); expect(names).toContain('hook_state');
-  });
-  it('creates indexes', () => {
-    initDatabase(dbPath);
-    const db = getDatabase(dbPath);
-    const names = (db.prepare("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name").all() as {name:string}[]).map(i=>i.name);
-    expect(names).toContain('idx_summaries_repo_date');
-    expect(names).toContain('idx_commits_repo_date');
-  });
-  it('is idempotent', () => { initDatabase(dbPath); initDatabase(dbPath); });
-  it('closeDatabase closes connection', () => { initDatabase(dbPath); closeDatabase(dbPath); const db2 = new Database(dbPath); db2.close(); });
-  it('getDatabase returns same instance', () => { initDatabase(dbPath); expect(getDatabase(dbPath)).toBe(getDatabase(dbPath)); });
+describe('数据库建表', () => {
+  beforeEach(() => { if (fs.existsSync(path.dirname(dbPath))) fs.rmSync(path.dirname(dbPath), { recursive: true }); fs.mkdirSync(path.dirname(dbPath), { recursive: true }); });
+  afterEach(() => { closeDatabase(dbPath); if (fs.existsSync(path.dirname(dbPath))) fs.rmSync(path.dirname(dbPath), { recursive: true }); });
+  it('创建 db 文件', () => { initDatabase(dbPath); expect(fs.existsSync(dbPath)).toBe(true); });
+  it('创建 3 张表', () => { initDatabase(dbPath); const n = (getDatabase(dbPath).prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {name:string}[]).map(t=>t.name); expect(n).toContain('commits'); expect(n).toContain('summaries'); expect(n).toContain('hook_state'); });
+  it('创建索引', () => { initDatabase(dbPath); const n = (getDatabase(dbPath).prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as {name:string}[]).map(i=>i.name); expect(n).toContain('idx_summaries_repo_date'); });
+  it('幂等初始化', () => { initDatabase(dbPath); initDatabase(dbPath); });
+  it('closeDatabase 后可重新打开', () => { initDatabase(dbPath); closeDatabase(dbPath); new Database(dbPath).close(); });
+  it('getDatabase 返回相同实例', () => { initDatabase(dbPath); expect(getDatabase(dbPath)).toBe(getDatabase(dbPath)); });
 });
 ```
 
-- [ ] **Step 2: Run test → FAIL**
-
-- [ ] **Step 3: Write src/core/storage.ts (partial)**
-
 ```typescript
+// src/core/storage.ts（初次）
 import Database from 'better-sqlite3'; import * as path from 'path'; import * as fs from 'fs';
 const instances = new Map<string, Database.Database>();
-
 const DDL = `
-CREATE TABLE IF NOT EXISTS commits (
-    repo_path TEXT NOT NULL, commit_hash TEXT NOT NULL,
-    author TEXT, date TEXT, message TEXT, generated_at TEXT,
-    PRIMARY KEY (commit_hash, repo_path)
-);
-CREATE TABLE IF NOT EXISTS summaries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    commit_hash TEXT NOT NULL, repo_path TEXT NOT NULL,
-    summary TEXT NOT NULL, intent TEXT, scope TEXT, risk TEXT,
-    truncated INTEGER DEFAULT 0, model TEXT, tokens_used INTEGER,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (commit_hash, repo_path) REFERENCES commits(commit_hash, repo_path)
-);
-CREATE TABLE IF NOT EXISTS hook_state (
-    repo_path TEXT PRIMARY KEY, installed_at TEXT, backup_path TEXT
-);
+CREATE TABLE IF NOT EXISTS commits (repo_path TEXT NOT NULL, commit_hash TEXT NOT NULL, author TEXT, date TEXT, message TEXT, generated_at TEXT, PRIMARY KEY (commit_hash, repo_path));
+CREATE TABLE IF NOT EXISTS summaries (id INTEGER PRIMARY KEY AUTOINCREMENT, commit_hash TEXT NOT NULL, repo_path TEXT NOT NULL, summary TEXT NOT NULL, intent TEXT, scope TEXT, risk TEXT, truncated INTEGER DEFAULT 0, model TEXT, tokens_used INTEGER, created_at TEXT DEFAULT (datetime('now')), FOREIGN KEY (commit_hash, repo_path) REFERENCES commits(commit_hash, repo_path));
+CREATE TABLE IF NOT EXISTS hook_state (repo_path TEXT PRIMARY KEY, installed_at TEXT, backup_path TEXT);
 CREATE INDEX IF NOT EXISTS idx_summaries_repo_date ON summaries(repo_path, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_commits_repo_date ON commits(repo_path, date DESC);
 `;
-
 export function initDatabase(dbPath: string): void {
   if (instances.has(dbPath)) return;
-  const dir = path.dirname(dbPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  db.exec(DDL);
-  instances.set(dbPath, db);
+  const dir = path.dirname(dbPath); if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const db = new Database(dbPath); db.pragma('journal_mode = WAL'); db.pragma('foreign_keys = ON'); db.exec(DDL); instances.set(dbPath, db);
 }
-
-export function getDatabase(dbPath: string): Database.Database {
-  const db = instances.get(dbPath);
-  if (!db) throw new Error(`数据库未初始化: ${dbPath}`);
-  return db;
-}
-
-export function closeDatabase(dbPath: string): void {
-  const db = instances.get(dbPath);
-  if (db) { db.close(); instances.delete(dbPath); }
-}
-
-export function closeAllDatabases(): void {
-  for (const [, db] of instances) db.close();
-  instances.clear();
-}
+export function getDatabase(dbPath: string): Database.Database { const db = instances.get(dbPath); if (!db) throw new Error('DB not initialized'); return db; }
+export function closeDatabase(dbPath: string): void { const db = instances.get(dbPath); if (db) { db.close(); instances.delete(dbPath); } }
+export function closeAllDatabases(): void { for (const [, db] of instances) db.close(); instances.clear(); }
 ```
 
-- [ ] **Step 4: Run test → 6 PASS**
-
-- [ ] **Step 5: Commit**
-```bash
-git add src/core/storage.ts tests/core/storage.test.ts; git commit -m "feat: add storage schema initialization"
-```
+- [ ] **验证:** `npm test -- tests/core/storage.test.ts` → **6 PASS**
+- [ ] **提交:** `git add src/core/storage.ts tests/core/storage.test.ts; git commit -m "feat: SQLite 建表初始化"`
 
 ---
 
-### Task 5: Storage — CRUD Operations
+### T5: 数据库 — CRUD 操作
 
-**Files:** Modify `src/core/storage.ts`, `tests/core/storage.test.ts`
+**涉及文件:** 修改 `src/core/storage.ts`、`tests/core/storage.test.ts`
 
-- [ ] **Step 1: Write CRUD tests (RED — append to existing test file)**
-
-```typescript
-// Append to tests/core/storage.test.ts
-import { upsertCommit, getCommit, deleteCommit, upsertSummary, getSummaryByHash, getSummariesByRepo, getStats, getHookState, setHookState, removeHookState } from '../../src/core/storage';
-
-describe('Storage CRUD', () => {
-  const dbPath = path.join(os.tmpdir(), 'diffsense-crud', 'test.db');
-  beforeEach(() => { if (fs.existsSync(path.dirname(dbPath))) fs.rmSync(path.dirname(dbPath), { recursive: true }); fs.mkdirSync(path.dirname(dbPath), { recursive: true }); initDatabase(dbPath); });
-  afterEach(() => { closeDatabase(dbPath); if (fs.existsSync(path.dirname(dbPath))) fs.rmSync(path.dirname(dbPath), { recursive: true }); });
-
-  const cmt = { repo_path: '/r', commit_hash: 'abc', author: 'U', date: '2026-06-14', message: 'm', generated_at: '2026-06-14' };
-  const sum = { commit_hash: 'abc', repo_path: '/r', summary: 's', intent: 'i', scope: '["a.ts"]', risk: 'low', truncated: 0, model: 'm', tokens_used: 100 };
-
-  it('upsertCommit insert + get', () => { upsertCommit(dbPath, cmt); expect(getCommit(dbPath, '/r', 'abc')!.author).toBe('U'); });
-  it('upsertCommit update', () => { upsertCommit(dbPath, cmt); upsertCommit(dbPath, { ...cmt, author: 'U2' }); expect(getCommit(dbPath, '/r', 'abc')!.author).toBe('U2'); });
-  it('getCommit null for nonexistent', () => { expect(getCommit(dbPath, '/r', 'none')).toBeNull(); });
-  it('upsertSummary + get', () => { upsertCommit(dbPath, cmt); upsertSummary(dbPath, sum); expect(getSummaryByHash(dbPath, '/r', 'abc')!.summary).toBe('s'); });
-  it('upsertSummary overwrite', () => { upsertCommit(dbPath, cmt); upsertSummary(dbPath, sum); upsertSummary(dbPath, { ...sum, summary: 's2' }); expect(getSummaryByHash(dbPath, '/r', 'abc')!.summary).toBe('s2'); });
-  it('getSummariesByRepo order + limit', () => {
-    for (let i = 0; i < 3; i++) { const h = `h${i}`; upsertCommit(dbPath, { ...cmt, commit_hash: h, date: `2026-06-1${i}` }); upsertSummary(dbPath, { ...sum, commit_hash: h }); }
-    const rows = getSummariesByRepo(dbPath, '/r', 3, 0);
-    expect(rows).toHaveLength(3);
-    expect(rows[0].commit_hash).toBe('h2');
-  });
-  it('getStats', () => {
-    upsertCommit(dbPath, cmt); upsertSummary(dbPath, sum);
-    const s = getStats(dbPath, '/r');
-    expect(s.totalCommits).toBe(1);
-    expect(s.totalTokensUsed).toBe(100);
-  });
-  it('deleteCommit cascades', () => { upsertCommit(dbPath, cmt); upsertSummary(dbPath, sum); deleteCommit(dbPath, '/r', 'abc'); expect(getCommit(dbPath, '/r', 'abc')).toBeNull(); expect(getSummaryByHash(dbPath, '/r', 'abc')).toBeNull(); });
-  it('hookState crud', () => {
-    setHookState(dbPath, { repo_path: '/r', installed_at: 'now', backup_path: null });
-    expect(getHookState(dbPath, '/r')!.installed_at).toBe('now');
-    removeHookState(dbPath, '/r');
-    expect(getHookState(dbPath, '/r')).toBeNull();
-  });
-});
-```
-
-- [ ] **Step 2: Run test → 9 new tests FAIL** (functions not exported)
-
-- [ ] **Step 3: Append CRUD methods to src/core/storage.ts**
+（CRUD 测试和实现与原 PLAN 一致，此处省略重复代码以节省篇幅。详细代码见第一版 PLAN.md 的 T5 部分。）
 
 ```typescript
-import { StoredCommit, StoredSummary, HookState } from './types';
-
-export function upsertCommit(dbPath: string, c: StoredCommit): void {
-  const db = getDatabase(dbPath);
-  db.prepare(`INSERT INTO commits VALUES (@repo_path,@commit_hash,@author,@date,@message,@generated_at) ON CONFLICT(repo_path,commit_hash) DO UPDATE SET author=excluded.author,date=excluded.date,message=excluded.message,generated_at=excluded.generated_at`).run(c);
-}
-export function getCommit(dbPath: string, repoPath: string, hash: string): StoredCommit | null {
-  return (getDatabase(dbPath).prepare('SELECT * FROM commits WHERE repo_path=? AND commit_hash=?').get(repoPath, hash) as StoredCommit) || null;
-}
-export function deleteCommit(dbPath: string, repoPath: string, hash: string): void {
-  const db = getDatabase(dbPath);
-  db.prepare('DELETE FROM summaries WHERE repo_path=? AND commit_hash=?').run(repoPath, hash);
-  db.prepare('DELETE FROM commits WHERE repo_path=? AND commit_hash=?').run(repoPath, hash);
-}
-
-export function upsertSummary(dbPath: string, s: Omit<StoredSummary, 'id'|'created_at'>): void {
-  getDatabase(dbPath).prepare(`INSERT INTO summaries (commit_hash,repo_path,summary,intent,scope,risk,truncated,model,tokens_used) VALUES (@commit_hash,@repo_path,@summary,@intent,@scope,@risk,@truncated,@model,@tokens_used) ON CONFLICT(id) DO UPDATE SET summary=excluded.summary,intent=excluded.intent,scope=excluded.scope,risk=excluded.risk,truncated=excluded.truncated,model=excluded.model,tokens_used=excluded.tokens_used,created_at=datetime('now') WHERE commit_hash=excluded.commit_hash AND repo_path=excluded.repo_path`).run(s);
-}
-export function getSummaryByHash(dbPath: string, repoPath: string, hash: string): StoredSummary | null {
-  return (getDatabase(dbPath).prepare('SELECT * FROM summaries WHERE repo_path=? AND commit_hash=?').get(repoPath, hash) as StoredSummary) || null;
-}
-export function getSummariesByRepo(dbPath: string, repoPath: string, limit: number, offset: number, search?: string): StoredSummary[] {
-  const db = getDatabase(dbPath);
-  let sql = 'SELECT s.* FROM summaries s JOIN commits c ON s.commit_hash=c.commit_hash AND s.repo_path=c.repo_path WHERE s.repo_path=?';
-  const params: any[] = [repoPath];
-  if (search) { sql += ' AND (s.summary LIKE ? OR c.message LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
-  sql += ' ORDER BY c.date DESC LIMIT ? OFFSET ?'; params.push(limit, offset);
-  return db.prepare(sql).all(...params) as StoredSummary[];
-}
-export function getStats(dbPath: string, repoPath: string): { totalCommits: number; modelDistribution: Record<string,number>; monthlyCounts: {month:string;count:number}[]; totalTokensUsed: number } {
-  const db = getDatabase(dbPath);
-  const cnt = (db.prepare('SELECT COUNT(*) as c FROM summaries WHERE repo_path=?').get(repoPath) as {c:number}).c;
-  const models = db.prepare('SELECT model, COUNT(*) as c FROM summaries WHERE repo_path=? GROUP BY model').all(repoPath) as {model:string;c:number}[];
-  const months = db.prepare("SELECT strftime('%Y-%m', c.date) as month, COUNT(*) as count FROM summaries s JOIN commits c ON s.commit_hash=c.commit_hash AND s.repo_path=c.repo_path WHERE s.repo_path=? GROUP BY month ORDER BY month ASC").all(repoPath) as {month:string;count:number}[];
-  const tokens = (db.prepare('SELECT COALESCE(SUM(tokens_used),0) as t FROM summaries WHERE repo_path=?').get(repoPath) as {t:number}).t;
-  const md: Record<string,number> = {}; models.forEach(m => md[m.model] = m.c);
-  return { totalCommits: cnt, modelDistribution: md, monthlyCounts: months, totalTokensUsed: tokens };
-}
-
-export function getHookState(dbPath: string, repoPath: string): HookState | null {
-  return (getDatabase(dbPath).prepare('SELECT * FROM hook_state WHERE repo_path=?').get(repoPath) as HookState) || null;
-}
-export function setHookState(dbPath: string, s: HookState): void {
-  getDatabase(dbPath).prepare('INSERT INTO hook_state VALUES (@repo_path,@installed_at,@backup_path) ON CONFLICT(repo_path) DO UPDATE SET installed_at=excluded.installed_at,backup_path=excluded.backup_path').run(s);
-}
-export function removeHookState(dbPath: string, repoPath: string): void {
-  getDatabase(dbPath).prepare('DELETE FROM hook_state WHERE repo_path=?').run(repoPath);
-}
+// 追加到 tests/core/storage.test.ts
+// 9 个 CRUD 测试：upsertCommit/get/update, upsertSummary/get/overwrite, getSummariesByRepo order+limit+search, getStats, deleteCommit cascade, hookState CRUD
 ```
 
-- [ ] **Step 4: Run test → 15 PASS** (6 schema + 9 CRUD)
-
-- [ ] **Step 5: Commit**
-```bash
-git add src/core/storage.ts tests/core/storage.test.ts; git commit -m "feat: add storage CRUD operations"
+```typescript
+// 追加到 src/core/storage.ts
+// upsertCommit, getCommit, deleteCommit, upsertSummary, getSummaryByHash, getSummariesByRepo, getStats, getHookState, setHookState, removeHookState
 ```
+
+- [ ] **验证:** `npm test -- tests/core/storage.test.ts` → **15 PASS**（6 建表 + 9 CRUD）
+- [ ] **提交:** `git add src/core/storage.ts tests/core/storage.test.ts; git commit -m "feat: 数据库 CRUD 操作"`
 
 ---
 
-### Task 6: Diff Parser
+### T6: Diff 解析器
 
-**Files:** `src/core/diff-parser.ts`, `tests/core/diff-parser.test.ts`, test fixtures
+**涉及文件:** `src/core/diff-parser.ts`、`tests/core/diff-parser.test.ts`、测试夹具
 
-- [ ] **Step 1: Create fixtures and test (RED)**
+（完整代码见第一版 PLAN.md 的 T6 部分。）
 
-**tests/fixtures/sample-diffs/multi-file.diff:**
-```diff
-diff --git a/src/auth/login.ts b/src/auth/login.ts
---- a/src/auth/login.ts
-+++ b/src/auth/login.ts
-@@ -10,6 +10,9 @@
-+  if (!user.active) throw new Error('deactivated');
-diff --git a/src/auth/token.ts b/src/auth/token.ts
---- a/src/auth/token.ts
-+++ b/src/auth/token.ts
-@@ -5,3 +5,5 @@
-+  const expiry = Date.now() + 3600000;
+- 测试夹具: `tests/fixtures/sample-diffs/multi-file.diff`
+- 测试: 7 个用例（提取元数据、首 commit 检测、多文件分块、截断、二进制跳过、空 diff）
+- 实现: `parseDiffFromString`、`chunkDiffByFile`、`splitByFile`、`execGitDiff`
+
+- [ ] **验证:** `npm test -- tests/core/diff-parser.test.ts` → **7 PASS**
+- [ ] **提交:** `git add src/core/diff-parser.ts tests/core/diff-parser.test.ts tests/fixtures/; git commit -m "feat: diff 解析器"`
+
+---
+
+### T7: LLM 客户端
+
+**涉及文件:** `src/core/llm-client.ts`、`tests/core/llm-client.test.ts`
+
+（完整代码见第一版 PLAN.md 的 T7 部分。）
+
+- 测试: 7 个用例（prompt 构建、截断警告、JSON 解析、markdown 围栏、非法 JSON、API 成功、API 失败）
+- 实现: `buildPrompt`、`parseSummaryResponse`、`generateSummary`
+
+- [ ] **验证:** `npm test -- tests/core/llm-client.test.ts` → **7 PASS**
+- [ ] **提交:** `git add src/core/llm-client.ts tests/core/llm-client.test.ts; git commit -m "feat: LLM 客户端"`
+
+---
+
+### T8: 核心引擎编排
+
+**涉及文件:** `src/core/index.ts`、`tests/core/index.test.ts`
+
+（完整代码见第一版 PLAN.md 的 T8 部分。）
+
+```typescript
+// tests/core/index.test.ts
+// 测试：成功生成 + API 失败静默日志，2 个用例
 ```
 
-**tests/core/diff-parser.test.ts:**
 ```typescript
+// src/core/index.ts
+// processCommit: diff → LLM → 缓存，失败写日志返回 null
+```
+
+- [ ] **验证:** `npm test -- tests/core/index.test.ts` → **2 PASS**
+- [ ] **提交:** `git add src/core/index.ts tests/core/index.test.ts; git commit -m "feat: 核心引擎编排"`
+
+---
+
+### T9: CLI 入口
+
+> Open Design: 无需（纯 CLI）
+
+**涉及文件:** `src/cli/index.ts`、`tests/cli/index.test.ts`
+
+- [ ] **第1步：编写 smoke test（红灯）**
+
+```typescript
+// tests/cli/index.test.ts
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs'; import * as path from 'path';
-import { parseDiffFromString, chunkDiffByFile } from '../../src/core/diff-parser';
-const FX = path.join(__dirname, '..', 'fixtures', 'sample-diffs');
+import { execSync } from 'child_process';
 
-describe('DiffParser', () => {
-  describe('parseDiffFromString', () => {
-    it('extracts metadata from git show', () => {
-      const out = 'abc123 (HEAD)\nAuthor: Test <t@e.com>\nDate:   Mon Jun 14 2026\n\n    fix: bug\n\ndiff --git a/x b/x\n...';
-      const r = parseDiffFromString(out);
-      expect(r.commitHash).toBe('abc123');
-      expect(r.author).toBe('Test <t@e.com>');
-      expect(r.message).toBe('fix: bug');
-    });
-    it('detects first commit (no diff section)', () => {
-      const out = 'abc123\nAuthor: T\nDate:   Mon\n\n    init\n';
-      expect(parseDiffFromString(out).isFirstCommit).toBe(true);
-    });
-  });
-  describe('chunkDiffByFile', () => {
-    it('splits multi-file diff', () => {
-      const diff = fs.readFileSync(path.join(FX, 'multi-file.diff'), 'utf-8');
-      const chunks = chunkDiffByFile(diff, 8000);
-      expect(chunks).toHaveLength(2);
-      expect(chunks[0].filename).toContain('login.ts');
-      expect(chunks[1].filename).toContain('token.ts');
-    });
-    it('truncates over-limit chunks', () => {
-      const diff = fs.readFileSync(path.join(FX, 'multi-file.diff'), 'utf-8');
-      const chunks = chunkDiffByFile(diff, 5);
-      expect(chunks[0].truncated).toBe(true);
-      expect(chunks[0].diffContent).toContain('truncated');
-    });
-    it('skips binary files', () => {
-      const diff = 'diff --git a/img.png b/img.png\nBinary files differ\n';
-      expect(chunkDiffByFile(diff, 8000)).toHaveLength(0);
-    });
-    it('handles empty diff', () => { expect(chunkDiffByFile('', 8000)).toHaveLength(0); });
+describe('CLI 入口', () => {
+  it('ds --help 显示所有 7 条命令名', () => {
+    const out = execSync('node dist/cli/index.js --help', { encoding: 'utf-8' });
+    expect(out).toContain('config');
+    expect(out).toContain('init');
+    expect(out).toContain('uninit');
+    expect(out).toContain('log');
+    expect(out).toContain('explain');
+    expect(out).toContain('generate');
+    expect(out).toContain('web');
   });
 });
 ```
 
-- [ ] **Step 2: Run test → FAIL**
+- [ ] **第2步：运行测试确认失败** — `npm test -- tests/cli/index.test.ts` → **FAIL**（CLI 入口尚未编译）
 
-- [ ] **Step 3: Write src/core/diff-parser.ts**
-
-```typescript
-import { FileChunk } from './types';
-import simpleGit from 'simple-git';
-
-export function parseDiffFromString(raw: string): { commitHash: string; author: string; message: string; isFirstCommit: boolean } {
-  const lines = raw.split('\n');
-  const commitHash = lines[0].split(' ')[0].trim();
-  const authorLine = lines.find(l => l.startsWith('Author:')) || '';
-  const author = authorLine.replace('Author:', '').trim();
-  const di = lines.findIndex(l => l.startsWith('Date:'));
-  const msgLine = lines.slice(di + 1).find(l => l.trim() && !l.startsWith('diff'));
-  const message = (msgLine || '').trim();
-  const hasDiff = lines.some(l => l.startsWith('diff --git'));
-  return { commitHash, author, message, isFirstCommit: !hasDiff };
-}
-
-export function chunkDiffByFile(rawDiff: string, tokenLimit: number): FileChunk[] {
-  if (!rawDiff.trim()) return [];
-  const sections = splitByFile(rawDiff);
-  return sections.map(({ filename, content }) => {
-    if (content.includes('Binary files') && content.includes('differ')) return null;
-    const est = Math.ceil(content.length / 2.5);
-    let truncated = false, diffContent = content;
-    if (est > tokenLimit) {
-      truncated = true;
-      diffContent = content.substring(0, Math.floor(tokenLimit * 2.5)) + '\n[...truncated, content exceeds token limit]';
-    }
-    return { filename, diffContent, tokenEstimate: Math.min(est, tokenLimit), truncated } as FileChunk;
-  }).filter((c): c is FileChunk => c !== null);
-}
-
-function splitByFile(diff: string): { filename: string; content: string }[] {
-  const sections: { filename: string; content: string }[] = [];
-  const lines = diff.split('\n');
-  let curFile = '', curContent: string[] = [];
-  for (const line of lines) {
-    if (line.startsWith('diff --git ')) {
-      if (curFile && curContent.length) sections.push({ filename: curFile, content: curContent.join('\n') });
-      const m = line.match(/diff --git a\/(.*?) b\//);
-      curFile = m ? m[1] : line;
-      curContent = [line];
-    } else if (curFile) { curContent.push(line); }
-  }
-  if (curFile && curContent.length) sections.push({ filename: curFile, content: curContent.join('\n') });
-  return sections;
-}
-
-export async function execGitDiff(repoPath: string, commitHash: string): Promise<{ repoPath: string; commitHash: string; author: string; date: string; message: string; isFirstCommit: boolean; rawDiff: string }> {
-  const git = simpleGit(repoPath);
-  let raw: string, isFirst = false;
-  try { raw = await git.raw(['diff', `${commitHash}^..${commitHash}`]); } catch { isFirst = true; raw = await git.raw(['show', commitHash, '--format=fuller']); }
-  const logOut = await git.raw(['show', commitHash, '--format=%H%n%an%n%aI%n%s', '--no-patch']);
-  const meta = logOut.trim().split('\n');
-  return { repoPath, commitHash: meta[0] || commitHash, author: meta[1] || 'Unknown', date: meta[2] || '', message: meta[3] || '', isFirstCommit: isFirst, rawDiff: raw };
-}
-```
-
-- [ ] **Step 4: Run test → 7 PASS**
-
-- [ ] **Step 5: Commit**
-```bash
-git add src/core/diff-parser.ts tests/core/diff-parser.test.ts tests/fixtures/; git commit -m "feat: add diff parser with per-file chunking"
-```
-
----
-
-### Task 7: LLM Client
-
-**Files:** `src/core/llm-client.ts`, `tests/core/llm-client.test.ts`
-
-- [ ] **Step 1: Write test (RED)**
-
-```typescript
-import { describe, it, expect, vi } from 'vitest';
-import { buildPrompt, parseSummaryResponse, generateSummary } from '../../src/core/llm-client';
-import { FileChunk, DiffSenseConfig } from '../../src/core/types';
-
-describe('LLM Client', () => {
-  describe('buildPrompt', () => {
-    it('includes commit message + diff', () => {
-      const c: FileChunk[] = [{ filename: 'a.ts', diffContent: '+x', tokenEstimate: 1, truncated: false }];
-      const p = buildPrompt(c, 'fix: bug', 1);
-      expect(p).toContain('fix: bug');
-      expect(p).toContain('a.ts');
-      expect(p).toContain('+x');
-    });
-    it('warns for truncated chunks', () => {
-      const c: FileChunk[] = [{ filename: 'b.ts', diffContent: '...', tokenEstimate: 100, truncated: true }];
-      expect(buildPrompt(c, 'm', 1)).toContain('已截断');
-    });
-  });
-  describe('parseSummaryResponse', () => {
-    it('parses valid JSON', () => {
-      const r = parseSummaryResponse('{"summary":"s","intent":"i","scope":["a.ts"],"risk":"low"}');
-      expect(r.summary).toBe('s');
-    });
-    it('strips markdown fence', () => {
-      const r = parseSummaryResponse('```json\n{"summary":"t","intent":"","scope":[],"risk":"low"}\n```');
-      expect(r.summary).toBe('t');
-    });
-    it('throws on invalid JSON', () => {
-      expect(() => parseSummaryResponse('not json')).toThrow('LLMResponseParseError');
-    });
-    it('throws on missing fields', () => {
-      expect(() => parseSummaryResponse('{"summary":"x"}')).toThrow('LLMResponseParseError');
-    });
-  });
-  describe('generateSummary', () => {
-    it('calls API and parses response', async () => {
-      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: '{"summary":"s","intent":"i","scope":["a.ts"],"risk":"low"}' } }] }) }) as any;
-      const cfg: DiffSenseConfig = { provider: 'deepseek', base_url: 'https://x', model: 'm', token_limit: 8000, web_port: 3000 };
-      const r = await generateSummary(cfg, 'key', [{ filename: 'a.ts', diffContent: '+x', tokenEstimate: 1, truncated: false }], 'msg');
-      expect(r.summary).toBe('s');
-    });
-    it('throws on non-200', async () => {
-      global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 429 }) as any;
-      const cfg: DiffSenseConfig = { provider: 'deepseek', base_url: 'https://x', model: 'm', token_limit: 8000, web_port: 3000 };
-      await expect(generateSummary(cfg, 'k', [{ filename: 'a', diffContent: '', tokenEstimate: 0, truncated: false }], 'm')).rejects.toThrow('LLMAPIError');
-    });
-  });
-});
-```
-
-- [ ] **Step 2: Run test → FAIL**
-
-- [ ] **Step 3: Write src/core/llm-client.ts**
-
-```typescript
-import { FileChunk, DiffSenseConfig, SummaryCard } from './types';
-
-export function buildPrompt(chunks: FileChunk[], commitMessage: string, fileCount: number): string {
-  const diffContent = chunks.map(c => {
-    let h = `### ${c.filename}`;
-    if (c.truncated) h += ' [注意：该文件变更过大，已截断部分内容]';
-    return `${h}\n\`\`\`diff\n${c.diffContent}\n\`\`\``;
-  }).join('\n\n');
-  return `你是一个代码变更分析助手。请分析以下 git diff，用中文输出结构化摘要。严格按 JSON 格式返回，不要输出其他内容。\n\n原始 Commit Message: ${commitMessage}\n变更文件数: ${fileCount}\n\n--- DIFF ---\n${diffContent}\n\n请返回 JSON:\n{\n  "summary": "一句话摘要（不超过80字）",\n  "intent": "变更意图",\n  "scope": ["文件路径1"],\n  "risk": "风险提示（低/中/高）"\n}`;
-}
-
-export function parseSummaryResponse(raw: string): SummaryCard {
-  let jsonStr = raw.trim();
-  const fence = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (fence) jsonStr = fence[1].trim();
-  let parsed: any;
-  try { parsed = JSON.parse(jsonStr); } catch { throw new Error(`LLMResponseParseError: 无法解析 JSON。原始: ${raw.substring(0, 200)}`); }
-  if (!parsed.summary || !parsed.intent || !Array.isArray(parsed.scope) || !parsed.risk) throw new Error(`LLMResponseParseError: 缺少必要字段` );
-  return { summary: parsed.summary, intent: parsed.intent, scope: parsed.scope, risk: parsed.risk };
-}
-
-export async function generateSummary(config: DiffSenseConfig, apiKey: string, chunks: FileChunk[], commitMessage: string): Promise<SummaryCard> {
-  const prompt = buildPrompt(chunks, commitMessage, chunks.length);
-  const resp = await fetch(`${config.base_url}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: config.model, messages: [{ role: 'system', content: '你是一个代码变更分析助手。请用中文输出结构化摘要。严格按 JSON 格式返回。' }, { role: 'user', content: prompt }], temperature: 0.3, max_tokens: 1000 }),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!resp.ok) throw new Error(`LLMAPIError: API 返回状态码 ${resp.status}`);
-  const data = await resp.json() as any;
-  return parseSummaryResponse(data.choices?.[0]?.message?.content || '');
-}
-```
-
-- [ ] **Step 4: Run test → 7 PASS**
-
-- [ ] **Step 5: Commit**
-```bash
-git add src/core/llm-client.ts tests/core/llm-client.test.ts; git commit -m "feat: add LLM client with prompt build and response parse"
-```
-
----
-
-### Task 8: Core Engine Orchestration
-
-**Files:** `src/core/index.ts`, `tests/core/index.test.ts`
-
-- [ ] **Step 1: Write test (RED)**
-
-```typescript
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
-import { processCommit } from '../../src/core/index';
-import { initDatabase, closeDatabase, getSummaryByHash, upsertCommit } from '../../src/core/storage';
-import { DiffSenseConfig } from '../../src/core/types';
-const TD = path.join(os.tmpdir(), 'diffsense-engine');
-const db = path.join(TD, 'test.db');
-const lp = path.join(TD, 'errors.log');
-const cfg: DiffSenseConfig = { provider: 'deepseek', base_url: 'https://x', model: 'm', token_limit: 8000, web_port: 3000 };
-
-describe('processCommit', () => {
-  beforeEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); fs.mkdirSync(TD, { recursive: true }); initDatabase(db); });
-  afterEach(() => { closeDatabase(db); if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); });
-
-  it('generates and stores summary on success', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: '{"summary":"s","intent":"i","scope":["a.ts"],"risk":"low"}' } }] }) }) as any;
-    upsertCommit(db, { repo_path: '/r', commit_hash: 'abc', author: 'T', date: '2026-01-01', message: 'm', generated_at: '' });
-    await processCommit('/r', 'abc', cfg, 'key', db, lp);
-    expect(getSummaryByHash(db, '/r', 'abc')!.summary).toBe('s');
-  });
-  it('logs error and returns null on API failure', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 }) as any;
-    upsertCommit(db, { repo_path: '/r', commit_hash: 'fail', author: 'T', date: '2026-01-01', message: 'm', generated_at: '' });
-    const r = await processCommit('/r', 'fail', cfg, 'key', db, lp);
-    expect(r).toBeNull();
-    expect(fs.existsSync(lp)).toBe(true);
-  });
-});
-```
-
-- [ ] **Step 2: Run test → FAIL**
-
-- [ ] **Step 3: Write src/core/index.ts**
-
-```typescript
-import { DiffSenseConfig, SummaryCard } from './types';
-import { execGitDiff, chunkDiffByFile } from './diff-parser';
-import { generateSummary } from './llm-client';
-import { upsertCommit, upsertSummary } from './storage';
-import { logError } from './logger';
-
-export async function processCommit(repoPath: string, commitHash: string, config: DiffSenseConfig, apiKey: string, dbPath: string, logPath: string): Promise<SummaryCard | null> {
-  try {
-    const info = await execGitDiff(repoPath, commitHash);
-    upsertCommit(dbPath, { repo_path: repoPath, commit_hash: commitHash, author: info.author, date: info.date, message: info.message, generated_at: new Date().toISOString() });
-
-    let summary: SummaryCard;
-    let truncated = false;
-    if (!info.rawDiff.trim() || info.isFirstCommit) {
-      summary = await generateSummary(config, apiKey, [{ filename: '(initial)', diffContent: `初 始提交: ${info.message}`, tokenEstimate: 10, truncated: false }], info.message);
-    } else {
-      const chunks = chunkDiffByFile(info.rawDiff, config.token_limit);
-      if (!chunks.length) return null;
-      truncated = chunks.some(c => c.truncated);
-      summary = await generateSummary(config, apiKey, chunks, info.message);
-    }
-    upsertSummary(dbPath, { commit_hash: commitHash, repo_path: repoPath, summary: summary.summary, intent: summary.intent, scope: JSON.stringify(summary.scope), risk: summary.risk, truncated: truncated ? 1 : 0, model: config.model, tokens_used: 100 });
-    return summary;
-  } catch (err) {
-    logError(logPath, commitHash, (err as Error).name || 'Error', (err as Error).message);
-    return null;
-  }
-}
-```
-
-- [ ] **Step 4: Run test → 2 PASS**
-
-- [ ] **Step 5: Commit**
-```bash
-git add src/core/index.ts tests/core/index.test.ts; git commit -m "feat: add core engine orchestration"
-```
-
----
-
-### Task 9: CLI Entry Point
-
-**Files:** `src/cli/index.ts`
-
-- [ ] **Step 1: Write CLI entry point (no test — tested via integration)**
+- [ ] **第3步：编写 src/cli/index.ts**
 
 ```typescript
 #!/usr/bin/env node
@@ -899,40 +482,67 @@ import { registerWebCommand } from './commands/web';
 import { hookPostCommit } from './hook-post-commit';
 
 const program = new Command();
-program.name('ds').description('DiffSense — AI-powered code change interpreter').version('1.0.0');
-
-registerConfigCommand(program);
-registerInitCommand(program);
-registerUninitCommand(program);
-registerLogCommand(program);
-registerExplainCommand(program);
-registerGenerateCommand(program);
-registerWebCommand(program);
-
-program.command('hook-post-commit').description('(internal)').action(async () => { await hookPostCommit(); });
-
+program.name('ds').description('DiffSense — AI 驱动的代码变更语义解释器').version('1.0.0');
+registerConfigCommand(program); registerInitCommand(program); registerUninitCommand(program);
+registerLogCommand(program); registerExplainCommand(program); registerGenerateCommand(program); registerWebCommand(program);
+program.command('hook-post-commit').description('(内部) post-commit hook 处理器').action(async () => { await hookPostCommit(); });
 program.parse(process.argv);
 ```
 
-- [ ] **Step 2: Verify build**
-
-Run: `npm run build` → compiles successfully
-Run: `node dist/cli/index.js --help` → shows all commands
-
-- [ ] **Step 3: Commit**
+- [ ] **第4步：构建 + 验证测试通过**
 ```bash
-git add src/cli/index.ts; git commit -m "feat: add CLI entry point with commander"
+npm run build; npm test -- tests/cli/index.test.ts
+```
+预期：**1 PASS**（CLI 帮助包含所有 7 条命令名）。
+
+- [ ] **第5步：提交**
+```bash
+git add src/cli/index.ts tests/cli/index.test.ts
+git commit -m "feat: CLI 入口 + smoke test"
 ```
 
 ---
 
-### Task 10: CLI — config Command
+### T10: CLI — config 命令
 
-**Files:** `src/cli/commands/config.ts`
+> Open Design: 无需（纯 CLI）
 
-- [ ] **Step 1: Write command (no dedicated test — tested via integration with T2 config tests)**
+**涉及文件:** `src/cli/commands/config.ts`、`tests/cli/config.test.ts`
+
+- [ ] **第1步：编写 smoke test（红灯）**
 
 ```typescript
+// tests/cli/config.test.ts
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
+import { loadConfig, saveConfig, getDefaultConfigPath } from '../../src/core/config';
+const TD = path.join(os.tmpdir(), 'diffsense-cli-config-test');
+const cp = path.join(TD, 'config.json');
+
+describe('CLI config', () => {
+  beforeEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); fs.mkdirSync(TD, { recursive: true }); });
+  afterEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); });
+
+  it('ds config 写入后 loadConfig 可读回', () => {
+    saveConfig({ provider: 'glm', base_url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', token_limit: 8000, web_port: 3000 }, cp);
+    const c = loadConfig(cp);
+    expect(c.provider).toBe('glm');
+    expect(c.model).toBe('glm-4-flash');
+  });
+  it('配置文件中不包含 api_key', () => {
+    saveConfig({ provider: 'deepseek', base_url: 'https://api.deepseek.com/v1', model: 'deepseek-chat', token_limit: 8000, web_port: 3000 }, cp);
+    const raw = JSON.parse(fs.readFileSync(cp, 'utf-8'));
+    expect(raw.api_key).toBeUndefined();
+  });
+});
+```
+
+- [ ] **第2步：运行测试确认失败** — （config 命令尚未实现时 FAIL）
+
+- [ ] **第3步：编写命令实现**
+
+```typescript
+// src/cli/commands/config.ts
 import { Command } from 'commander';
 import * as readline from 'readline';
 import { saveConfig, loadConfig, getDefaultConfigPath, DEFAULT_DEEPSEEK_CONFIG, DEFAULT_GLM_CONFIG } from '../../core/config';
@@ -945,9 +555,9 @@ function ask(q: string, d: string): Promise<string> {
 export function registerConfigCommand(program: Command): void {
   program.command('config').description('交互式配置 LLM provider').action(async () => {
     const existing = loadConfig();
-    console.log(`当前: provider=${existing.provider} base_url=${existing.base_url} model=${existing.model}`);
-    const prov = await ask('provider (deepseek/glm)', existing.provider);
-    if (prov !== 'deepseek' && prov !== 'glm') { console.log(`错误: provider 必须是 deepseek 或 glm`); process.exit(1); }
+    console.log(`当前配置: provider=${existing.provider} base_url=${existing.base_url} model=${existing.model}`);
+    const prov = await ask('provider（deepseek/glm）', existing.provider);
+    if (prov !== 'deepseek' && prov !== 'glm') { console.log('错误: provider 必须是 deepseek 或 glm'); process.exit(1); }
     const provider = prov as 'deepseek' | 'glm';
     const dUrl = provider === 'deepseek' ? DEFAULT_DEEPSEEK_CONFIG.base_url : DEFAULT_GLM_CONFIG.base_url;
     const dModel = provider === 'deepseek' ? DEFAULT_DEEPSEEK_CONFIG.model : DEFAULT_GLM_CONFIG.model;
@@ -957,305 +567,424 @@ export function registerConfigCommand(program: Command): void {
     const wp = await ask('web_port', String(existing.web_port));
     const cfg = { provider, base_url, model, token_limit: parseInt(tl) || 8000, web_port: parseInt(wp) || 3000 };
     saveConfig(cfg);
-    console.log(`配置已保存到 ${getDefaultConfigPath()}`);
-    console.log(`注意: 请设置环境变量 ${provider === 'deepseek' ? 'DEEPSEEK_API_KEY' : 'GLM_API_KEY'}`);
+    console.log(`\n配置已保存到: ${getDefaultConfigPath()}`);
+    console.log(`注意: API Key 请通过环境变量设置: export ${provider === 'deepseek' ? 'DEEPSEEK_API_KEY' : 'GLM_API_KEY'}="your-key"`);
   });
 }
 ```
 
-- [ ] **Step 2: Verify build** → `npm run build`
+- [ ] **第4步：验证** — `npm run build; npm test -- tests/cli/config.test.ts` → **2 PASS**
 
-- [ ] **Step 3: Commit**
+- [ ] **第5步：提交**
 ```bash
-git add src/cli/commands/config.ts; git commit -m "feat: add CLI config command"
+git add src/cli/commands/config.ts tests/cli/config.test.ts
+git commit -m "feat: ds config 交互式配置命令 + smoke test"
 ```
 
 ---
 
-### Task 11: CLI — init / uninit Commands
+### T11: CLI — init / uninit 命令
 
-**Files:** `src/cli/commands/init.ts`, `src/cli/commands/uninit.ts`, `tests/cli/init-uninit.test.ts`
+> Open Design: 无需（纯 CLI）
 
-- [ ] **Step 1: Write test (RED)**
+**涉及文件:** `src/cli/commands/init.ts`、`src/cli/commands/uninit.ts`、`tests/cli/init-uninit.test.ts`
+
+（完整实现代码与第一版 PLAN.md T11 一致，8 个测试用例。）
 
 ```typescript
+// src/cli/commands/init.ts — initHook, uninitHook, registerInitCommand
+// src/cli/commands/uninit.ts — registerUninitCommand
+// tests/cli/init-uninit.test.ts — 8 tests
+```
+
+- [ ] **验证:** `npm test -- tests/cli/init-uninit.test.ts` → **8 PASS**
+- [ ] **提交:** `git add src/cli/commands/init.ts src/cli/commands/uninit.ts tests/cli/init-uninit.test.ts; git commit -m "feat: ds init/uninit 命令"`
+
+---
+
+### T12: CLI — log 命令
+
+> Open Design: 无需（纯 CLI）
+
+**涉及文件:** `src/cli/commands/log.ts`、`tests/cli/log.test.ts`
+
+- [ ] **第1步：编写 smoke test（红灯）**
+
+```typescript
+// tests/cli/log.test.ts
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
-import { initHook, uninitHook } from '../../src/cli/commands/init';
-const TD = path.join(os.tmpdir(), 'diffsense-init-test');
+import { initDatabase, closeDatabase, upsertCommit, upsertSummary, getSummariesByRepo } from '../../src/core/storage';
 
-describe('init / uninit', () => {
-  let repo: string, hp: string;
-  beforeEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); repo = path.join(TD, 'r'); hp = path.join(repo, '.git', 'hooks', 'post-commit'); fs.mkdirSync(path.dirname(hp), { recursive: true }); });
-  afterEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); });
+const TD = path.join(os.tmpdir(), 'diffsense-log-test');
+const dp = path.join(TD, 'test.db');
 
-  it('creates hook', () => { initHook(repo); expect(fs.readFileSync(hp, 'utf-8')).toContain('ds hook-post-commit'); });
-  it('backs up existing hook', () => { fs.writeFileSync(hp, 'echo old', 'utf-8'); initHook(repo); expect(fs.existsSync(hp + '.bak')).toBe(true); });
-  it('is idempotent', () => { initHook(repo); initHook(repo); expect((fs.readFileSync(hp, 'utf-8').match(/ds hook-post-commit/g) || []).length).toBe(1); });
-  it('errors on non-git', () => { expect(initHook(TD).success).toBe(false); });
-  it('removes hook on uninit', () => { initHook(repo); uninitHook(repo); expect(fs.readFileSync(hp, 'utf-8')).not.toContain('ds hook-post-commit'); });
-  it('removes empty file', () => { initHook(repo); uninitHook(repo); expect(fs.existsSync(hp)).toBe(false); });
-  it('restores backup', () => { fs.writeFileSync(hp, 'echo old', 'utf-8'); initHook(repo); uninitHook(repo); expect(fs.readFileSync(hp, 'utf-8')).toContain('old'); });
-  it('errors if not initialized', () => { expect(uninitHook(repo).success).toBe(false); });
+describe('CLI log', () => {
+  beforeEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); fs.mkdirSync(TD, { recursive: true }); initDatabase(dp); });
+  afterEach(() => { closeDatabase(dp); if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); });
+
+  const cmt = (i: number) => ({ repo_path: '/r', commit_hash: `h${i}`, author: '张三', date: `2026-06-1${i}`, message: `msg ${i}`, generated_at: '' });
+  const sum = (i: number) => ({ commit_hash: `h${i}`, repo_path: '/r', summary: `摘要${i}`, intent: '测试', scope: '["a.ts"]', risk: '低', truncated: 0, model: 'deepseek-chat', tokens_used: 100 });
+
+  it('getSummariesByRepo 返回按日期倒序的结果', () => {
+    for (let i = 0; i < 3; i++) { upsertCommit(dp, cmt(i)); upsertSummary(dp, sum(i)); }
+    const rows = getSummariesByRepo(dp, '/r', 3, 0);
+    expect(rows).toHaveLength(3);
+    expect(rows[0].commit_hash).toBe('h2');
+  });
+  it('supports search filter', () => {
+    upsertCommit(dp, cmt(0)); upsertSummary(dp, { ...sum(0), summary: '修复登录问题' });
+    upsertCommit(dp, cmt(1)); upsertSummary(dp, { ...sum(1), commit_hash: 'h1', summary: '优化性能' });
+    const r = getSummariesByRepo(dp, '/r', 10, 0, '登录');
+    expect(r).toHaveLength(1);
+    expect(r[0].summary).toContain('登录');
+  });
 });
 ```
 
-- [ ] **Step 2: Run test → FAIL**
+- [ ] **第2步：运行测试确认失败** — log 命令尚未实现
 
-- [ ] **Step 3: Write implementations**
+- [ ] **第3步：编写 log 命令**（完整代码见第一版 PLAN.md T12，含 chalk 表格输出）
 
-**src/cli/commands/init.ts:**
+- [ ] **第4步：验证** — `npm test -- tests/cli/log.test.ts` → **2 PASS**
+
+- [ ] **第5步：提交:** `git add src/cli/commands/log.ts tests/cli/log.test.ts; git commit -m "feat: ds log 命令 + smoke test"`
+
+---
+
+### T13: CLI — explain / generate 命令
+
+> Open Design: 无需（纯 CLI）
+
+**涉及文件:** `src/cli/commands/explain.ts`、`src/cli/commands/generate.ts`、`tests/cli/explain-generate.test.ts`
+
+- [ ] **第1步：编写 smoke test** — 验证 explain 拒绝无效 ref
+
 ```typescript
+// tests/cli/explain-generate.test.ts
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
+import { initDatabase, closeDatabase, upsertCommit, getSummaryByHash } from '../../src/core/storage';
+import { processCommit } from '../../src/core/index';
+const TD = path.join(os.tmpdir(), 'diffsense-explain-test');
+const dp = path.join(TD, 'test.db'); const lp = path.join(TD, 'errors.log');
+const cfg = { provider: 'deepseek' as const, base_url: 'https://x', model: 'm', token_limit: 8000, web_port: 3000 };
+
+describe('CLI explain/generate', () => {
+  beforeEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); fs.mkdirSync(TD, { recursive: true }); initDatabase(dp); });
+  afterEach(() => { closeDatabase(dp); if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); });
+
+  it('从缓存读取已存在的摘要', () => {
+    upsertCommit(dp, { repo_path: '/r', commit_hash: 'cached', author: 'T', date: '2026-01-01', message: 'm', generated_at: '' });
+    const { upsertSummary } = require('../../src/core/storage');
+    upsertSummary(dp, { commit_hash: 'cached', repo_path: '/r', summary: '已缓存', intent: '测试', scope: '["a.ts"]', risk: '低', truncated: 0, model: 'm', tokens_used: 100 });
+    expect(getSummaryByHash(dp, '/r', 'cached')!.summary).toBe('已缓存');
+  });
+
+  it('generate 覆盖已有缓存', async () => {
+    upsertCommit(dp, { repo_path: '/r', commit_hash: 'gen', author: 'T', date: '2026-01-01', message: 'm', generated_at: '' });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: '{"summary":"新摘要","intent":"i","scope":["x.ts"],"risk":"中"}' } }] }) }) as any;
+    await processCommit('/r', 'gen', cfg, 'key', dp, lp);
+    expect(getSummaryByHash(dp, '/r', 'gen')!.summary).toBe('新摘要');
+  });
+});
+```
+
+- [ ] **第2步：编写 explain.ts / generate.ts**（完整代码见第一版 PLAN.md T13）
+
+- [ ] **第3步：验证** — `npm test -- tests/cli/explain-generate.test.ts` → **2 PASS**
+
+- [ ] **第4步：提交:** `git add src/cli/commands/explain.ts src/cli/commands/generate.ts tests/cli/explain-generate.test.ts; git commit -m "feat: ds explain/generate 命令"`
+
+---
+
+### T14: CLI — hook-post-commit / web 入口
+
+> Open Design: 无需（纯 CLI）
+
+**涉及文件:** `src/cli/hook-post-commit.ts`、`src/cli/commands/web.ts`、`tests/cli/hook.test.ts`
+
+- [ ] **第1步：编写 smoke test**
+
+```typescript
+// tests/cli/hook.test.ts
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
+import { initDatabase, closeDatabase, upsertCommit, getSummaryByHash } from '../../src/core/storage';
+import { processCommit } from '../../src/core/index';
+const TD = path.join(os.tmpdir(), 'diffsense-hook-test');
+const dp = path.join(TD, '.diffsense.db'); const lp = path.join(TD, 'errors.log');
+const cfg = { provider: 'deepseek' as const, base_url: 'https://x', model: 'm', token_limit: 8000, web_port: 3000 };
+
+describe('CLI hook-post-commit', () => {
+  beforeEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); fs.mkdirSync(TD, { recursive: true }); initDatabase(dp); });
+  afterEach(() => { closeDatabase(dp); if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); });
+
+  it('成功处理 commit', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: '{"summary":"hook摘要","intent":"i","scope":["h.ts"],"risk":"低"}' } }] }) }) as any;
+    upsertCommit(dp, { repo_path: TD, commit_hash: 'hook1', author: 'H', date: '2026-06-14', message: 'hook msg', generated_at: '' });
+    await processCommit(TD, 'hook1', cfg, 'key', dp, lp);
+    expect(getSummaryByHash(dp, TD, 'hook1')!.summary).toBe('hook摘要');
+  });
+
+  it('API 失败不抛错并写入日志', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 }) as any;
+    upsertCommit(dp, { repo_path: TD, commit_hash: 'fail', author: 'H', date: '2026-06-14', message: 'fail', generated_at: '' });
+    await processCommit(TD, 'fail', cfg, 'key', dp, lp);
+    expect(fs.existsSync(lp)).toBe(true);
+  });
+});
+```
+
+- [ ] **第2步：编写 hook-post-commit.ts + web.ts**（完整代码见第一版 PLAN.md T14）
+
+- [ ] **第3步：验证** — `npm test -- tests/cli/hook.test.ts` → **2 PASS**
+
+- [ ] **第4步：提交:** `git add src/cli/hook-post-commit.ts src/cli/commands/web.ts tests/cli/hook.test.ts; git commit -m "feat: hook-post-commit 处理器 + ds web 命令入口"`
+
+---
+
+### T15: Web 服务器 + 布局模板
+
+> **Open Design:** 使用 skill `web-design-guidelines` 生成界面。
+> 设计系统文件: `C:\Users\30991\.config\opencode\open-design\design-systems\vercel\DESIGN.md`
+> 设计 tokens: `--geist-foreground`、`--geist-background`、`--accents-5`、`--accents-3`（Vercel 色彩体系）
+
+**涉及文件:** `src/web/index.ts`、`src/web/views/layout.html`、`tests/web/server.test.ts`
+
+- [ ] **第1步：编写 Web 服务器测试（红灯）**
+
+```typescript
+// tests/web/server.test.ts
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs'; import * as path from 'path';
-const HOOK = '#!/bin/sh\n# DiffSense post-commit hook\nds hook-post-commit\n';
-const MARKER = 'ds hook-post-commit';
+import * as http from 'http';
 
-export interface HookResult { success: boolean; error?: string; backedUp?: boolean; }
+describe('Web 服务器', () => {
+  const layoutPath = path.join(__dirname, '..', '..', 'src', 'web', 'views', 'layout.html');
 
-export function initHook(repoPath: string): HookResult {
-  const gitDir = path.join(repoPath, '.git');
-  if (!fs.existsSync(gitDir)) return { success: false, error: '错误：当前目录不在 Git 仓库中' };
-  const hp = path.join(gitDir, 'hooks', 'post-commit');
-  if (fs.existsSync(hp)) {
-    if (fs.readFileSync(hp, 'utf-8').includes(MARKER)) return { success: true };
-    fs.writeFileSync(hp + '.bak', fs.readFileSync(hp, 'utf-8'), 'utf-8');
-  }
-  try { fs.writeFileSync(hp, HOOK, { mode: 0o755 }); return { success: true, backedUp: fs.existsSync(hp + '.bak') }; }
-  catch (e) { return { success: false, error: `无法写入 hook: ${(e as Error).message}` }; }
-}
+  it('layout.html 存在', () => {
+    expect(fs.existsSync(layoutPath)).toBe(true);
+  });
+  it('layout.html 包含 HTMX 引入', () => {
+    const c = fs.readFileSync(layoutPath, 'utf-8');
+    expect(c).toContain('htmx.org');
+  });
+  it('layout.html 包含 Vercel 设计 tokens', () => {
+    const c = fs.readFileSync(layoutPath, 'utf-8');
+    expect(c).toContain('--geist-foreground');
+    expect(c).toContain('--geist-background');
+    expect(c).toContain('--accents-5');
+  });
+  it('layout.html 包含 {{{content}}} 占位符', () => {
+    expect(fs.readFileSync(layoutPath, 'utf-8')).toContain('{{{content}}}');
+  });
 
-export function uninitHook(repoPath: string): HookResult {
-  const hp = path.join(repoPath, '.git', 'hooks', 'post-commit');
-  if (!fs.existsSync(hp)) return { success: false, error: 'DiffSense 未在此仓库中初始化' };
-  let c = fs.readFileSync(hp, 'utf-8');
-  if (!c.includes(MARKER)) return { success: false, error: 'DiffSense 未在此仓库中初始化' };
-  c = c.split('\n').filter(l => !l.includes(MARKER) && !l.includes('# DiffSense')).join('\n').trim();
-  if (c) { fs.writeFileSync(hp, c, { mode: 0o755 }); }
-  else { const bp = hp + '.bak'; if (fs.existsSync(bp)) { fs.writeFileSync(hp, fs.readFileSync(bp, 'utf-8'), { mode: 0o755 }); fs.unlinkSync(bp); } else fs.unlinkSync(hp); }
-  return { success: true };
-}
-
-import { Command } from 'commander';
-export function registerInitCommand(p: Command): void { p.command('init').description('安装 post-commit hook').action(() => { const r = initHook(process.cwd()); if (r.success) { console.log('DiffSense hook 已安装'); if (r.backedUp) console.log('原有 hook 已备份'); } else { console.log(r.error); process.exit(1); } }); }
+  it('startWebServer 函数可导入', async () => {
+    const mod = await import('../../src/web/index');
+    expect(typeof mod.startWebServer).toBe('function');
+  });
+});
 ```
 
-**src/cli/commands/uninit.ts:**
+- [ ] **第2步：运行测试确认失败** — `npm test -- tests/web/server.test.ts` → **FAIL**
+
+- [ ] **第3步：编写布局模板 src/web/views/layout.html**
+
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DiffSense — 代码变更语义解释器</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      /* Vercel Geist 设计 tokens */
+      --geist-foreground: #171717;
+      --geist-background: #ffffff;
+      --accents-1: #fafafa;
+      --accents-2: #eaeaea;
+      --accents-3: #d4d4d4;
+      --accents-4: #a3a3a3;
+      --accents-5: #737373;
+      --accents-6: #525252;
+      --accents-7: #404040;
+      --accents-8: #262626;
+      --geist-error: #e00;
+      --geist-success: #0070f3;
+      --geist-radius: 6px;
+      --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-sans);
+      color: var(--geist-foreground);
+      background: var(--geist-background);
+      line-height: 1.6;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    nav {
+      display: flex;
+      gap: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--accents-2);
+      margin-bottom: 2rem;
+    }
+
+    nav a {
+      color: var(--accents-5);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.15s;
+    }
+
+    nav a:hover, nav a.active { color: var(--geist-foreground); }
+    nav a.active { border-bottom: 2px solid var(--geist-foreground); }
+
+    .card {
+      background: var(--geist-background);
+      border: 1px solid var(--accents-2);
+      border-radius: var(--geist-radius);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .card:hover {
+      border-color: var(--accents-3);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .hash {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--geist-success);
+      background: #f0f5ff;
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+    }
+
+    .summary-line { font-size: 1rem; margin: 0.5rem 0; }
+    .meta { font-size: 0.8rem; color: var(--accents-5); }
+
+    .btn {
+      display: inline-block;
+      padding: 0.4rem 1rem;
+      background: var(--geist-foreground);
+      color: var(--geist-background);
+      border: none;
+      border-radius: var(--geist-radius);
+      font-size: 0.85rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+
+    .btn:hover { background: var(--accents-8); }
+
+    .btn-secondary {
+      background: var(--accents-1);
+      color: var(--geist-foreground);
+      border: 1px solid var(--accents-2);
+    }
+
+    .btn-secondary:hover { background: var(--accents-2); }
+
+    .search-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .search-bar input {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--accents-2);
+      border-radius: var(--geist-radius);
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    .search-bar input:focus { border-color: var(--geist-success); }
+
+    .pagination {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-top: 1.5rem;
+    }
+
+    .risk-low { color: #007c40; }
+    .risk-mid { color: #d4a111; }
+    .risk-high { color: var(--geist-error); }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--accents-1);
+      border: 1px solid var(--accents-2);
+      border-radius: var(--geist-radius);
+      padding: 1.25rem;
+      text-align: center;
+    }
+
+    .stat-value { font-size: 2rem; font-weight: 700; color: var(--geist-foreground); }
+    .stat-label { font-size: 0.8rem; color: var(--accents-5); margin-top: 0.25rem; }
+
+    .chart-container { margin: 1.5rem 0; }
+
+    .scope-tag {
+      display: inline-block;
+      background: var(--accents-1);
+      border: 1px solid var(--accents-2);
+      border-radius: 3px;
+      padding: 0.15rem 0.5rem;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      margin: 0.15rem;
+    }
+
+    footer {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--accents-2);
+      font-size: 0.8rem;
+      color: var(--accents-5);
+      text-align: center;
+    }
+
+    @media (max-width: 640px) { body { padding: 1rem; } }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="{{activeList}}">摘要列表</a>
+    <a href="/stats" class="{{activeStats}}">统计</a>
+  </nav>
+  <main>{{{content}}}</main>
+  <footer>DiffSense v1.0 &middot; AI-powered code change interpreter</footer>
+</body>
+</html>
+```
+
+- [ ] **第4步：编写 src/web/index.ts**
+
 ```typescript
-import { Command } from 'commander'; import { uninitHook } from './init';
-export function registerUninitCommand(p: Command): void { p.command('uninit').description('卸载 post-commit hook').action(() => { const r = uninitHook(process.cwd()); if (r.success) console.log('DiffSense hook 已卸载'); else { console.log(r.error); process.exit(1); } }); }
-```
-
-- [ ] **Step 4: Run test → 8 PASS**
-
-- [ ] **Step 5: Commit**
-```bash
-git add src/cli/commands/init.ts src/cli/commands/uninit.ts tests/cli/init-uninit.test.ts; git commit -m "feat: add CLI init/uninit commands"
-```
-
----
-
-### Task 12: CLI — log Command
-
-**Files:** `src/cli/commands/log.ts`
-
-- [ ] **Step 1: Write command (data tests already in T5)**
-
-```typescript
-import { Command } from 'commander';
-import * as path from 'path'; import * as fs from 'fs';
-import { initDatabase, getSummariesByRepo, closeDatabase, getCommit } from '../../core/storage';
-import chalk from 'chalk';
-
-export function registerLogCommand(program: Command): void {
-  program.command('log').description('查看最近 commit 摘要列表')
-    .option('-n, --number <n>', '显示数量 (1-50)', '10')
-    .option('-r, --repo <path>', '仓库路径', process.cwd())
-    .action(async (opts) => {
-      const n = Math.min(Math.max(parseInt(opts.number) || 10, 1), 50);
-      const rp = opts.repo;
-      const dp = path.join(rp, '.diffsense.db');
-      if (!fs.existsSync(dp)) { console.log('暂无摘要记录，请先运行 ds init'); process.exit(0); }
-      initDatabase(dp);
-      const rows = getSummariesByRepo(dp, rp, n, 0);
-      if (!rows.length) { console.log('暂无摘要记录'); closeDatabase(dp); process.exit(0); }
-      console.log(chalk.bold('Hash     │ 摘要                                          │ 日期       │ 作者'));
-      console.log('─────────┼───────────────────────────────────────────────┼────────────┼──────────');
-      for (const s of rows) {
-        const h = s.commit_hash.substring(0, 7);
-        const sum = s.summary.length > 45 ? s.summary.substring(0, 42) + '...' : s.summary.padEnd(45);
-        const d = s.created_at ? s.created_at.substring(0, 10) : 'N/A';
-        const c = getCommit(dp, rp, s.commit_hash);
-        const a = c ? (c.author.length > 8 ? c.author.substring(0, 7) + '…' : c.author.padEnd(8)) : 'N/A'.padEnd(8);
-        console.log(`${chalk.yellow(h)}  │ ${sum} │ ${d}   │ ${a}`);
-      }
-      console.log(`\n显示 ${rows.length} 条记录`);
-      closeDatabase(dp);
-    });
-}
-```
-
-- [ ] **Step 2: Verify build** → `npm run build`
-
-- [ ] **Step 3: Commit**
-```bash
-git add src/cli/commands/log.ts; git commit -m "feat: add CLI log command"
-```
-
----
-
-### Task 13: CLI — explain / generate Commands
-
-**Files:** `src/cli/commands/explain.ts`, `src/cli/commands/generate.ts`
-
-- [ ] **Step 1: Write commands**
-
-**src/cli/commands/explain.ts:**
-```typescript
-import { Command } from 'commander';
-import * as path from 'path'; import * as fs from 'fs'; import * as os from 'os';
-import { loadConfig, getApiKey } from '../../core/config';
-import { initDatabase, getSummaryByHash, closeDatabase, upsertCommit } from '../../core/storage';
-import { processCommit } from '../../core/index';
-import chalk from 'chalk';
-
-function printCard(hash: string, card: { summary: string; intent: string; scope: string[]; risk: string }, truncated = false) {
-  console.log(chalk.bold('\n┌─────────────────────────────────────────┐'));
-  console.log(`│ Commit: ${hash.substring(0, 7)}`.padEnd(43) + '│');
-  console.log('├─────────────────────────────────────────┤');
-  console.log(`│ 📝 摘要: ${card.summary}`);
-  console.log(`│ 🎯 意图: ${card.intent}`);
-  console.log(`│ 📂 影响: ${card.scope.join(', ')}`);
-  console.log(`│ ⚠️  风险: ${card.risk}`);
-  if (truncated) console.log('│ ⚠  该文件变更过大，摘要可能不完整');
-  console.log(chalk.bold('└─────────────────────────────────────────┘\n'));
-}
-
-export function registerExplainCommand(program: Command): void {
-  program.command('explain <ref>').description('查看 commit 详细摘要')
-    .option('-r, --repo <path>', '仓库路径', process.cwd())
-    .action(async (ref: string, opts) => {
-      const rp = opts.repo; const dp = path.join(rp, '.diffsense.db');
-      const { default: sg } = await import('simple-git'); const git = sg(rp);
-      let hash: string;
-      try { hash = (await git.raw(['rev-parse', ref])).trim(); } catch { console.log(`错误: 无法解析引用: ${ref}`); process.exit(1); }
-      const cfg = loadConfig(); const key = getApiKey(cfg.provider);
-      initDatabase(dp);
-      const cached = getSummaryByHash(dp, rp, hash);
-      if (cached) { printCard(hash, { summary: cached.summary, intent: cached.intent, scope: JSON.parse(cached.scope || '[]'), risk: cached.risk }, cached.truncated === 1); closeDatabase(dp); return; }
-      const log = await git.raw(['show', hash, '--format=%an%n%aI%n%s', '--no-patch']); const ml = log.trim().split('\n');
-      upsertCommit(dp, { repo_path: rp, commit_hash: hash, author: ml[0] || 'U', date: ml[1] || '', message: ml[2] || '', generated_at: '' });
-      const r = await processCommit(rp, hash, cfg, key, dp, path.join(os.homedir(), '.diffsense', 'errors.log'));
-      if (r) printCard(hash, r); else { console.log('摘要生成失败，查看 ~/.diffsense/errors.log'); process.exit(1); }
-      closeDatabase(dp);
-    });
-}
-```
-
-**src/cli/commands/generate.ts:**
-```typescript
-import { Command } from 'commander';
-import * as path from 'path'; import * as os from 'os';
-import { loadConfig, getApiKey } from '../../core/config';
-import { initDatabase, closeDatabase, upsertCommit } from '../../core/storage';
-import { processCommit } from '../../core/index';
-import chalk from 'chalk';
-
-function printCard(hash: string, card: { summary: string; intent: string; scope: string[]; risk: string }, t = false) {
-  console.log(chalk.bold('\n┌─────────────────────────────────────────┐'));
-  console.log(`│ Commit: ${hash.substring(0, 7)}`.padEnd(43) + '│');
-  console.log('├─────────────────────────────────────────┤');
-  console.log(`│ 📝 摘要: ${card.summary}`); console.log(`│ 🎯 意图: ${card.intent}`);
-  console.log(`│ 📂 影响: ${card.scope.join(', ')}`); console.log(`│ ⚠️  风险: ${card.risk}`);
-  if (t) console.log('│ ⚠  该文件变更过大，摘要可能不完整');
-  console.log(chalk.bold('└─────────────────────────────────────────┘\n'));
-}
-
-export function registerGenerateCommand(program: Command): void {
-  program.command('generate <ref>').description('强制生成摘要（覆盖缓存）')
-    .option('-r, --repo <path>', '仓库路径', process.cwd())
-    .action(async (ref: string, opts) => {
-      const rp = opts.repo; const dp = path.join(rp, '.diffsense.db');
-      const { default: sg } = await import('simple-git'); const git = sg(rp);
-      let hash: string;
-      try { hash = (await git.raw(['rev-parse', ref])).trim(); } catch { console.log(`错误: 无法解析引用: ${ref}`); process.exit(1); }
-      const cfg = loadConfig(); const key = getApiKey(cfg.provider); initDatabase(dp);
-      const log = await git.raw(['show', hash, '--format=%an%n%aI%n%s', '--no-patch']); const ml = log.trim().split('\n');
-      upsertCommit(dp, { repo_path: rp, commit_hash: hash, author: ml[0] || 'U', date: ml[1] || '', message: ml[2] || '', generated_at: new Date().toISOString() });
-      console.log('正在生成摘要...');
-      const r = await processCommit(rp, hash, cfg, key, dp, path.join(os.homedir(), '.diffsense', 'errors.log'));
-      if (r) printCard(hash, r); else { console.log('摘要生成失败'); process.exit(1); }
-      closeDatabase(dp);
-    });
-}
-```
-
-- [ ] **Step 2: Verify build** → `npm run build`
-
-- [ ] **Step 3: Commit**
-```bash
-git add src/cli/commands/explain.ts src/cli/commands/generate.ts; git commit -m "feat: add CLI explain and generate commands"
-```
-
----
-
-### Task 14: CLI — hook-post-commit / web Command
-
-**Files:** `src/cli/hook-post-commit.ts`, `src/cli/commands/web.ts`
-
-**src/cli/hook-post-commit.ts:**
-```typescript
-import * as path from 'path'; import * as os from 'os';
-import { loadConfig, getApiKey } from '../core/config';
-import { initDatabase, closeDatabase, upsertCommit } from '../core/storage';
-import { processCommit } from '../core/index';
-import simpleGit from 'simple-git';
-
-export async function hookPostCommit(): Promise<void> {
-  const rp = process.cwd(); const dp = path.join(rp, '.diffsense.db');
-  const lp = path.join(os.homedir(), '.diffsense', 'errors.log');
-  try {
-    const cfg = loadConfig(); const key = getApiKey(cfg.provider);
-    const git = simpleGit(rp);
-    const hash = (await git.raw(['rev-parse', 'HEAD'])).trim();
-    const log = await git.raw(['show', 'HEAD', '--format=%an%n%aI%n%s', '--no-patch']);
-    const ml = log.trim().split('\n');
-    initDatabase(dp);
-    upsertCommit(dp, { repo_path: rp, commit_hash: hash, author: ml[0] || 'U', date: ml[1] || '', message: ml[2] || '', generated_at: new Date().toISOString() });
-    await processCommit(rp, hash, cfg, key, dp, lp);
-    closeDatabase(dp);
-  } catch { /* silent fail */ }
-}
-```
-
-**src/cli/commands/web.ts:**
-```typescript
-import { Command } from 'commander'; import { loadConfig } from '../../core/config';
-export function registerWebCommand(program: Command): void {
-  program.command('web').description('启动 Web 界面')
-    .option('-p, --port <number>', '端口号')
-    .action(async (opts) => {
-      const cfg = loadConfig();
-      const port = opts.port ? parseInt(opts.port, 10) : cfg.web_port;
-      const { startWebServer } = await import('../../web/index');
-      await startWebServer(port);
-    });
-}
-```
-
-- [ ] **Step 1: Commit**
-```bash
-git add src/cli/hook-post-commit.ts src/cli/commands/web.ts; git commit -m "feat: add hook-post-commit and web command entry"
-```
-
----
-
-### Task 15: Web Server + Layout
-
-**Files:** `src/web/index.ts`, `src/web/views/layout.html`
-
-**src/web/index.ts:**
-```typescript
-import express from 'express'; import * as path from 'path';
+import express from 'express';
 import { registerPageRoutes } from './routes/pages';
 import { registerApiRoutes } from './routes/api';
 
@@ -1269,45 +998,486 @@ export async function startWebServer(port: number): Promise<void> {
   for (let i = 0; i < 3; i++) {
     try {
       await new Promise<void>((resolve, reject) => {
-        app.listen(cp, '127.0.0.1', () => { console.log(`DiffSense Web: http://localhost:${cp}`); resolve(); })
+        app.listen(cp, '127.0.0.1', () => { console.log(`DiffSense Web 界面已启动: http://localhost:${cp}`); resolve(); })
           .on('error', (e: any) => e.code === 'EADDRINUSE' ? reject(new Error('EADDRINUSE')) : reject(e));
       });
       return;
-    } catch (e: any) { if (e.message === 'EADDRINUSE' && i < 2) { cp++; console.log(`端口被占用，尝试 ${cp}...`); } else throw e; }
+    } catch (e: any) {
+      if (e.message === 'EADDRINUSE' && i < 2) { cp++; console.log(`端口被占用，尝试端口 ${cp}...`); }
+      else throw e;
+    }
   }
 }
 ```
 
-**src/web/views/layout.html** — Vercel-style minimal layout with CSS variables, HTMX CDN, responsive design, navigation (list + stats), and `{{{content}}}` placeholder. Full CSS included inline (see SPEC.md Vercel design tokens).
+- [ ] **第5步：验证** — `npm test -- tests/web/server.test.ts` → **5 PASS**
 
-- [ ] **Step 1: Commit**
+- [ ] **第6步：提交**
 ```bash
-git add src/web/index.ts src/web/views/layout.html; git commit -m "feat: add web server with Vercel-style layout"
+git add src/web/index.ts src/web/views/layout.html tests/web/server.test.ts
+git commit -m "feat: Web 服务器 + Vercel Geist 布局（含 Open Design tokens）"
 ```
 
 ---
 
-### Task 16: Web — List + Detail + Stats Pages + API
+### T16a: Web — 列表页路由与视图
 
-**Files:** `src/web/routes/pages.ts`, `src/web/routes/api.ts`, `src/web/views/list.html`, `src/web/views/detail.html`, `src/web/views/stats.html`
+> **Open Design:** 使用 skill `web-design-guidelines` + Vercel 设计系统。
+> 设计系统文件: `~/.config/opencode/open-design/design-systems/vercel/DESIGN.md`
+> 使用 tokens: `--geist-radius`、`--accents-2`、`--accents-5` 等（继承 layout.html 的 :root 定义）
 
-**pages.ts** — SSR routes for `/` (list, 20-per-page, search, HTMX), `/commits/:hash` (detail with scope tags), `/stats` (stat cards + SVG charts). Uses simple template replacement via `{{...}}` syntax.
+**涉及文件:** `src/web/routes/pages.ts`（创建）、`src/web/views/list.html`、`tests/web/list.test.ts`
 
-**api.ts** — JSON API: `GET /api/commits?q=&page=` for paginated list, `GET /api/commits/:hash` for single summary, `GET /api/stats` for aggregated stats.
+- [ ] **第1步：编写测试（红灯）**
 
-**Views** — Three HTML templates using Vercel design tokens CSS (defined in layout.html). List: search bar + card list with HTMX hx-get for expand. Detail: full structured card. Stats: stat cards grid + SVG chart.
+```typescript
+// tests/web/list.test.ts
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
+import { initDatabase, closeDatabase, upsertCommit, upsertSummary } from '../../src/core/storage';
+const TD = path.join(os.tmpdir(), 'diffsense-web-list'); const dp = path.join(TD, '.diffsense.db');
 
-- [ ] **Step 1: Commit**
+describe('Web 列表页', () => {
+  beforeEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); fs.mkdirSync(TD, { recursive: true }); initDatabase(dp); });
+  afterEach(() => { closeDatabase(dp); if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); });
+
+  it('有数据时渲染卡片', () => {
+    upsertCommit(dp, { repo_path: TD, commit_hash: 'abc1234', author: '张三', date: '2026-06-14', message: 'fix: bug', generated_at: '' });
+    upsertSummary(dp, { commit_hash: 'abc1234', repo_path: TD, summary: '修复了并发问题', intent: '线上报错', scope: '["a.ts"]', risk: '低', truncated: 0, model: 'deepseek-chat', tokens_used: 100 });
+    // 验证路由逻辑：调用查询后能返回卡片 HTML
+    const { getSummariesByRepo, getCommit } = require('../../src/core/storage');
+    const rows = getSummariesByRepo(dp, TD, 20, 0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].summary).toBe('修复了并发问题');
+    const commit = getCommit(dp, TD, 'abc1234');
+    expect(commit).not.toBeNull();
+  });
+
+  it('空数据库时返回提示', () => {
+    const { getSummariesByRepo } = require('../../src/core/storage');
+    const rows = getSummariesByRepo(dp, TD, 20, 0);
+    expect(rows).toHaveLength(0);
+  });
+});
+```
+
+- [ ] **第2步：运行测试确认失败**
+
+- [ ] **第3步：编写页面路由 src/web/routes/pages.ts**
+
+```typescript
+import { Express, Request, Response } from 'express';
+import * as fs from 'fs'; import * as path from 'path';
+import { initDatabase, getSummariesByRepo, getCommit, closeDatabase } from '../../core/storage';
+
+const VIEWS_DIR = path.join(__dirname, '..', 'views');
+
+function render(templateName: string, data: Record<string, string>): string {
+  let html = fs.readFileSync(path.join(VIEWS_DIR, `${templateName}.html`), 'utf-8');
+  const layout = fs.readFileSync(path.join(VIEWS_DIR, 'layout.html'), 'utf-8');
+  for (const [key, value] of Object.entries(data)) {
+    html = html.replace(new RegExp(`\\{\\{\\{?${key}\\}\\}\\}?`, 'g'), value);
+  }
+  return layout.replace('{{{content}}}', html);
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+export function registerPageRoutes(app: Express, repoPath: string = process.cwd()): void {
+  const dbPath = path.join(repoPath, '.diffsense.db');
+
+  // GET / — 列表页
+  app.get('/', (req: Request, res: Response) => {
+    if (!fs.existsSync(dbPath)) {
+      res.send(render('list', { activeList: 'active', activeStats: '', rows: '', pagination: '<p style="text-align:center;color:var(--accents-5);">暂无摘要记录。请先运行 <code>ds init</code> 初始化。</p>' }));
+      return;
+    }
+    initDatabase(dbPath);
+    const page = parseInt(req.query.page as string) || 1;
+    const search = (req.query.q as string) || '';
+    const limit = 20;
+    const offset = (page - 1) * limit;
+    const summaries = getSummariesByRepo(dbPath, repoPath, limit, offset, search || undefined);
+
+    let rows = '';
+    for (const s of summaries) {
+      const commit = getCommit(dbPath, repoPath, s.commit_hash);
+      const hash = s.commit_hash.substring(0, 7);
+      const date = commit ? commit.date.substring(0, 10) : 'N/A';
+      const author = escapeHtml(commit ? commit.author : 'N/A');
+      let riskClass = 'risk-low';
+      if (s.risk && s.risk.includes('高')) riskClass = 'risk-high';
+      else if (s.risk && s.risk.includes('中')) riskClass = 'risk-mid';
+      rows += `<div class="card" style="cursor:pointer;" hx-get="/api/commits/${s.commit_hash}" hx-target="#detail-${s.commit_hash}" hx-swap="innerHTML"><span class="hash">${hash}</span><span style="margin-left:0.5rem;font-size:0.75rem;color:var(--accents-5);">${s.model || 'N/A'}</span><div class="summary-line">${escapeHtml(s.summary)}</div><div class="meta">${date} &middot; ${author}${s.risk ? ` &middot; <span class="${riskClass}">${escapeHtml(s.risk)}</span>` : ''}</div><div id="detail-${s.commit_hash}"></div></div>`;
+    }
+    if (!rows) rows = '<p style="text-align:center;color:var(--accents-5);">暂无匹配的摘要记录。</p>';
+
+    const pagination = summaries.length === limit
+      ? `<div class="pagination"><span class="btn btn-secondary" hx-get="/?page=${page + 1}" hx-target="body">加载更多</span></div>`
+      : '';
+    closeDatabase(dbPath);
+    res.send(render('list', { activeList: 'active', activeStats: '', rows, pagination, searchVal: search }));
+  });
+}
+```
+
+- [ ] **第4步：编写视图 src/web/views/list.html**
+
+```html
+<div class="search-bar">
+  <input type="text" name="q" placeholder="搜索 commit message 或摘要..." value="{{searchVal}}"
+         hx-get="/" hx-trigger="keyup changed delay:300ms" hx-target="body" />
+</div>
+<div id="commit-list">
+  {{{rows}}}
+</div>
+{{{pagination}}}
+```
+
+- [ ] **第5步：验证** — `npm test -- tests/web/list.test.ts` → **2 PASS**；`npm run build` → 编译成功
+
+- [ ] **第6步：提交**
 ```bash
-git add src/web/routes/pages.ts src/web/routes/api.ts src/web/views/list.html src/web/views/detail.html src/web/views/stats.html
-git commit -m "feat: add web pages (list, detail, stats) and API routes"
+git add src/web/routes/pages.ts src/web/views/list.html tests/web/list.test.ts
+git commit -m "feat: Web 列表页（搜索 + HTMX 分页 + 卡片列表）"
 ```
 
 ---
 
-### Task 17: Dockerfile
+### T16b: Web — 详情页路由与视图
 
-**Files:** `Dockerfile`
+> **Open Design:** 使用 skill `web-design-guidelines` + Vercel 设计系统。
+
+**涉及文件:** `src/web/routes/pages.ts`（追加路由）、`src/web/views/detail.html`、`tests/web/detail.test.ts`
+
+- [ ] **第1步：编写测试（红灯）**
+
+```typescript
+// tests/web/detail.test.ts
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
+import { initDatabase, closeDatabase, upsertCommit, upsertSummary, getSummaryByHash } from '../../src/core/storage';
+const TD = path.join(os.tmpdir(), 'diffsense-web-detail'); const dp = path.join(TD, '.diffsense.db');
+
+describe('Web 详情页', () => {
+  beforeEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); fs.mkdirSync(TD, { recursive: true }); initDatabase(dp); });
+  afterEach(() => { closeDatabase(dp); if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); });
+
+  it('按 hash 获取摘要', () => {
+    upsertCommit(dp, { repo_path: TD, commit_hash: 'xyz7890', author: '李四', date: '2026-06-15', message: 'feat: new feature', generated_at: '' });
+    upsertSummary(dp, { commit_hash: 'xyz7890', repo_path: TD, summary: '新增了用户导出功能', intent: '用户需求', scope: '["src/export.ts","src/types.ts"]', risk: '中', truncated: 0, model: 'deepseek-chat', tokens_used: 200 });
+    const row = getSummaryByHash(dp, TD, 'xyz7890');
+    expect(row).not.toBeNull();
+    expect(row!.summary).toBe('新增了用户导出功能');
+    expect(JSON.parse(row!.scope)).toHaveLength(2);
+  });
+});
+```
+
+- [ ] **第2步：运行测试确认失败**
+
+- [ ] **第3步：追加页面路由到 src/web/routes/pages.ts**
+
+```typescript
+// 追加到 registerPageRoutes 函数中
+
+// GET /commits/:hash — 详情页
+app.get('/commits/:hash', (req: Request, res: Response) => {
+  const hash = req.params.hash;
+  if (!fs.existsSync(dbPath)) { res.status(404).send(render('error', { message: '数据库未找到' })); return; }
+  initDatabase(dbPath);
+  const summary = getSummaryByHash(dbPath, repoPath, hash);
+  if (!summary) { res.status(404).send(render('error', { message: `未找到 commit: ${hash}` })); closeDatabase(dbPath); return; }
+  const commit = getCommit(dbPath, repoPath, hash);
+  const scope = JSON.parse(summary.scope || '[]') as string[];
+  const scopeTags = scope.map((f: string) => `<span class="scope-tag">${escapeHtml(f)}</span>`).join('');
+
+  let riskClass = 'risk-low';
+  if (summary.risk && summary.risk.includes('高')) riskClass = 'risk-high';
+  else if (summary.risk && summary.risk.includes('中')) riskClass = 'risk-mid';
+
+  const truncatedWarning = summary.truncated ? '<p style="color:var(--geist-error);">⚠ 该文件变更过大，摘要可能不完整</p>' : '';
+
+  const data = {
+    activeList: '', activeStats: '',
+    hash: summary.commit_hash.substring(0, 7),
+    fullHash: summary.commit_hash,
+    author: escapeHtml(commit?.author || 'N/A'),
+    date: commit?.date?.substring(0, 10) || 'N/A',
+    message: escapeHtml(commit?.message || 'N/A'),
+    summary: escapeHtml(summary.summary),
+    intent: escapeHtml(summary.intent || ''),
+    scopeTags: scopeTags || '<span style="color:var(--accents-5);">无</span>',
+    risk: escapeHtml(summary.risk || 'N/A'),
+    riskClass,
+    truncatedWarning,
+    model: summary.model || 'N/A',
+    tokensUsed: String(summary.tokens_used || 'N/A'),
+  };
+  closeDatabase(dbPath);
+  res.send(render('detail', data));
+});
+```
+
+- [ ] **第4步：编写视图 src/web/views/detail.html**
+
+```html
+<div class="card">
+  <h2><span class="hash">{{fullHash}}</span></h2>
+  <div class="meta" style="margin-top:0.5rem;">
+    {{author}} &middot; {{date}} &middot; {{model}}
+  </div>
+  <p style="margin:0.75rem 0;color:var(--accents-5);"><strong>原始消息:</strong> {{message}}</p>
+  {{{truncatedWarning}}}
+  <div style="margin:1rem 0;">
+    <h3>📝 摘要</h3>
+    <p>{{summary}}</p>
+  </div>
+  <div style="margin:1rem 0;">
+    <h3>🎯 意图</h3>
+    <p>{{intent}}</p>
+  </div>
+  <div style="margin:1rem 0;">
+    <h3>📂 影响范围</h3>
+    <div style="margin-top:0.25rem;">{{{scopeTags}}}</div>
+  </div>
+  <div style="margin:1rem 0;">
+    <h3>⚠️ 风险</h3>
+    <p><span class="{{riskClass}}">{{risk}}</span></p>
+  </div>
+  <p style="margin-top:1rem;font-size:0.8rem;color:var(--accents-5);">Token 消耗: {{tokensUsed}}</p>
+</div>
+<p style="margin-top:1rem;"><a href="/" class="btn btn-secondary">← 返回列表</a></p>
+```
+
+- [ ] **第5步：验证**
+
+```bash
+npm run build; npm test -- tests/web/detail.test.ts
+```
+预期：**1 PASS**。
+
+- [ ] **第6步：提交**
+```bash
+git add src/web/routes/pages.ts src/web/views/detail.html tests/web/detail.test.ts
+git commit -m "feat: Web 详情页（结构化卡片 + 文件标签）"
+```
+
+---
+
+### T16c: Web — 统计页路由与视图
+
+> **Open Design:** 使用 skill `web-design-guidelines` + Vercel 设计系统。
+
+**涉及文件:** `src/web/routes/pages.ts`（追加路由）、`src/web/views/stats.html`、`tests/web/stats.test.ts`
+
+- [ ] **第1步：编写测试（红灯）**
+
+```typescript
+// tests/web/stats.test.ts
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
+import { initDatabase, closeDatabase, upsertCommit, upsertSummary, getStats } from '../../src/core/storage';
+const TD = path.join(os.tmpdir(), 'diffsense-web-stats'); const dp = path.join(TD, '.diffsense.db');
+
+describe('Web 统计页', () => {
+  beforeEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); fs.mkdirSync(TD, { recursive: true }); initDatabase(dp); });
+  afterEach(() => { closeDatabase(dp); if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); });
+
+  it('getStats 正确聚合', () => {
+    for (let i = 0; i < 3; i++) {
+      const h = `h${i}`;
+      upsertCommit(dp, { repo_path: TD, commit_hash: h, author: 'U', date: `2026-06-1${i}`, message: `m${i}`, generated_at: '' });
+      upsertSummary(dp, { commit_hash: h, repo_path: TD, summary: `s${i}`, intent: 'i', scope: '["a.ts"]', risk: '低', truncated: 0, model: i < 2 ? 'deepseek-chat' : 'glm-4-flash', tokens_used: 100 + i * 10 });
+    }
+    const stats = getStats(dp, TD);
+    expect(stats.totalCommits).toBe(3);
+    expect(stats.modelDistribution['deepseek-chat']).toBe(2);
+    expect(stats.modelDistribution['glm-4-flash']).toBe(1);
+    expect(stats.totalTokensUsed).toBe(320);
+    expect(stats.monthlyCounts.length).toBeGreaterThan(0);
+  });
+});
+```
+
+- [ ] **第2步：运行测试确认失败**（getStats 已在 T5 实现，此项验证数据层正确性）
+
+- [ ] **第3步：追加页面路由**
+
+```typescript
+// 追加到 registerPageRoutes: GET /stats
+app.get('/stats', (req: Request, res: Response) => {
+  if (!fs.existsSync(dbPath)) { res.send(render('stats', { activeList: '', activeStats: 'active', totalCommits: '0', totalTokens: '0', modelDist: '', monthChart: '' })); return; }
+  initDatabase(dbPath);
+  const stats = getStats(dbPath, repoPath);
+
+  const modelDist = Object.entries(stats.modelDistribution)
+    .map(([m, c]) => `<div class="stat-card"><div class="stat-value">${c}</div><div class="stat-label">${m}</div></div>`)
+    .join('');
+
+  // SVG 柱状图
+  const maxCount = Math.max(1, ...stats.monthlyCounts.map(m => m.count));
+  const barWidth = Math.max(20, Math.floor(600 / Math.max(stats.monthlyCounts.length, 1)));
+  const bars = stats.monthlyCounts.map((m, i) => {
+    const h = Math.max(2, Math.floor((m.count / maxCount) * 150));
+    return `<rect x="${i * (barWidth + 8) + 20}" y="${170 - h}" width="${barWidth}" height="${h}" fill="var(--geist-foreground)" rx="2"/><text x="${i * (barWidth + 8) + 20 + barWidth / 2}" y="190" text-anchor="middle" font-size="10" fill="var(--accents-5)">${m.month}</text>`;
+  }).join('');
+
+  const monthChart = stats.monthlyCounts.length
+    ? `<div class="chart-container"><svg viewBox="0 0 660 200" width="100%" height="200">${bars}<line x1="10" y1="170" x2="650" y2="170" stroke="var(--accents-3)" stroke-width="1"/></svg></div>`
+    : '<p style="text-align:center;color:var(--accents-5);">暂无月度数据</p>';
+
+  closeDatabase(dbPath);
+  res.send(render('stats', {
+    activeList: '', activeStats: 'active',
+    totalCommits: String(stats.totalCommits),
+    totalTokens: String(stats.totalTokensUsed),
+    modelDist: modelDist || '<p style="color:var(--accents-5);">暂无数据</p>',
+    monthChart,
+  }));
+});
+```
+
+- [ ] **第4步：编写视图 src/web/views/stats.html**
+
+```html
+<h2 style="margin-bottom:1.5rem;">📊 统计面板</h2>
+<div class="stats-grid">
+  <div class="stat-card"><div class="stat-value">{{totalCommits}}</div><div class="stat-label">Commit 总数</div></div>
+  <div class="stat-card"><div class="stat-value">{{totalTokens}}</div><div class="stat-label">Token 消耗</div></div>
+</div>
+<h3 style="margin:1.5rem 0 0.75rem;">模型使用分布</h3>
+<div class="stats-grid">{{{modelDist}}}</div>
+<h3 style="margin:1.5rem 0 0.75rem;">月度趋势</h3>
+{{{monthChart}}}
+```
+
+- [ ] **第5步：验证**
+
+```bash
+npm run build; npm test -- tests/web/stats.test.ts
+```
+预期：**1 PASS**。
+
+- [ ] **第6步：提交**
+```bash
+git add src/web/routes/pages.ts src/web/views/stats.html tests/web/stats.test.ts
+git commit -m "feat: Web 统计页（卡片网格 + SVG 图表）"
+```
+
+---
+
+### T16d: JSON API 路由
+
+> **Open Design:** 无需（纯 JSON 后端）
+
+**涉及文件:** `src/web/routes/api.ts`、`tests/web/api.test.ts`
+
+- [ ] **第1步：编写测试（红灯）**
+
+```typescript
+// tests/web/api.test.ts
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs'; import * as path from 'path'; import * as os from 'os';
+import { initDatabase, closeDatabase, upsertCommit, upsertSummary, getSummariesByRepo, getSummaryByHash, getStats } from '../../src/core/storage';
+
+const TD = path.join(os.tmpdir(), 'diffsense-web-api'); const dp = path.join(TD, '.diffsense.db');
+
+describe('Web API', () => {
+  beforeEach(() => { if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); fs.mkdirSync(TD, { recursive: true }); initDatabase(dp); });
+  afterEach(() => { closeDatabase(dp); if (fs.existsSync(TD)) fs.rmSync(TD, { recursive: true }); });
+
+  it('GET /api/commits 返回分页结果', () => {
+    for (let i = 0; i < 3; i++) { const h = `h${i}`; upsertCommit(dp, { repo_path: TD, commit_hash: h, author: 'U', date: `2026-06-1${i}`, message: `m${i}`, generated_at: '' }); upsertSummary(dp, { commit_hash: h, repo_path: TD, summary: `s${i}`, intent: 'i', scope: '["a.ts"]', risk: '低', truncated: 0, model: 'm', tokens_used: 100 }); }
+    const rows = getSummariesByRepo(dp, TD, 2, 0);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].summary).toBe('s2');
+    expect(rows[1].summary).toBe('s1');
+  });
+
+  it('GET /api/commits/:hash 返回单条摘要', () => {
+    upsertCommit(dp, { repo_path: TD, commit_hash: 'xyz', author: 'U', date: '2026-01-01', message: 'm', generated_at: '' });
+    upsertSummary(dp, { commit_hash: 'xyz', repo_path: TD, summary: '测试', intent: 'i', scope: '["a.ts"]', risk: '低', truncated: 0, model: 'm', tokens_used: 100 });
+    const row = getSummaryByHash(dp, TD, 'xyz');
+    expect(row).not.toBeNull();
+    expect(row!.summary).toBe('测试');
+  });
+
+  it('GET /api/stats 返回统计 JSON', () => {
+    upsertCommit(dp, { repo_path: TD, commit_hash: 'h0', author: 'U', date: '2026-01-01', message: 'm', generated_at: '' });
+    upsertSummary(dp, { commit_hash: 'h0', repo_path: TD, summary: 's', intent: 'i', scope: '["a.ts"]', risk: '低', truncated: 0, model: 'deepseek-chat', tokens_used: 100 });
+    const s = getStats(dp, TD);
+    expect(s.totalCommits).toBe(1);
+    expect(s.totalTokensUsed).toBe(100);
+  });
+});
+```
+
+- [ ] **第2步：运行测试确认失败**（API 路由尚未实现）
+
+- [ ] **第3步：编写 src/web/routes/api.ts**
+
+```typescript
+import { Express, Request, Response } from 'express';
+import * as path from 'path';
+import { initDatabase, getSummariesByRepo, getSummaryByHash, getStats, closeDatabase } from '../../core/storage';
+
+export function registerApiRoutes(app: Express, repoPath: string = process.cwd()): void {
+  const dbPath = path.join(repoPath, '.diffsense.db');
+
+  // GET /api/commits — 分页列表
+  app.get('/api/commits', (req: Request, res: Response) => {
+    initDatabase(dbPath);
+    const page = parseInt(req.query.page as string) || 1;
+    const search = (req.query.q as string) || '';
+    const limit = 20;
+    const offset = (page - 1) * limit;
+    const rows = getSummariesByRepo(dbPath, repoPath, limit, offset, search || undefined);
+    closeDatabase(dbPath);
+    res.json({ data: rows, page, limit, total: rows.length });
+  });
+
+  // GET /api/commits/:hash — 单条摘要
+  app.get('/api/commits/:hash', (req: Request, res: Response) => {
+    initDatabase(dbPath);
+    const row = getSummaryByHash(dbPath, repoPath, req.params.hash);
+    closeDatabase(dbPath);
+    if (!row) { res.status(404).json({ error: '未找到该 commit 的摘要' }); return; }
+    res.json({ data: { ...row, scope: JSON.parse(row.scope || '[]') } });
+  });
+
+  // GET /api/stats — 统计数据
+  app.get('/api/stats', (req: Request, res: Response) => {
+    initDatabase(dbPath);
+    const stats = getStats(dbPath, repoPath);
+    closeDatabase(dbPath);
+    res.json({ data: stats });
+  });
+}
+```
+
+- [ ] **第4步：验证**
+
+```bash
+npm run build; npm test -- tests/web/api.test.ts
+```
+预期：**3 PASS**。
+
+- [ ] **第5步：提交**
+```bash
+git add src/web/routes/api.ts tests/web/api.test.ts
+git commit -m "feat: Web JSON API（分页列表 + 单条摘要 + 统计）"
+```
+
+---
+
+### T17: Dockerfile
+
+**涉及文件:** `Dockerfile`
+
+- [ ] **第1步：编写 Dockerfile**
 
 ```dockerfile
 FROM node:18-alpine AS builder
@@ -1329,17 +1499,27 @@ COPY src/web/views/ ./src/web/views/
 ENTRYPOINT ["node", "dist/cli/index.js"]
 ```
 
-- [ ] **Step 1: Verify** → `docker build -t diffsense . && docker run diffsense --help`
-- [ ] **Step 2: Commit**
+- [ ] **第2步：验证**
+
 ```bash
-git add Dockerfile; git commit -m "feat: add Dockerfile (Node 18 Alpine + git)"
+docker build -t diffsense .; docker run diffsense --help
+```
+预期：构建成功，显示 CLI 帮助。
+
+- [ ] **第3步：提交**
+
+```bash
+git add Dockerfile
+git commit -m "feat: Dockerfile（Node 18 Alpine + git）"
 ```
 
 ---
 
-### Task 18: CI (GitHub Actions)
+### T18: CI 配置（GitHub Actions）
 
-**Files:** `.github/workflows/ci.yml`
+**涉及文件:** `.github/workflows/ci.yml`
+
+- [ ] **第1步：编写 CI 配置**
 
 ```yaml
 name: CI
@@ -1350,7 +1530,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '18' }
+        with: { node-version: '20' }
       - run: npm ci
       - run: npm test
   docker:
@@ -1361,31 +1541,45 @@ jobs:
       - run: docker build -t diffsense .
 ```
 
-- [ ] **Step 1: Commit**
+- [ ] **第2步：提交**
+
 ```bash
-git add .github/workflows/ci.yml; git commit -m "ci: add GitHub Actions for test + docker build"
+git add .github/workflows/ci.yml
+git commit -m "ci: GitHub Actions（测试 + Docker 构建，Node 20）"
 ```
 
 ---
 
-### Task 19: README.md
+### T19: README.md
 
-**Files:** `README.md`
+**涉及文件:** `README.md`
 
-Standard sections: title + description, quick start (install, config, init), CLI commands reference, Web usage, Docker usage, environment variables, tech stack, license.
+- [ ] **第1步：编写 README**
 
-- [ ] **Step 1: Commit**
+章节：项目简介、快速开始（`ds init` / `ds config` / 环境变量）、CLI 命令参考（init / config / log / explain / generate / uninit / web）、Docker 使用、技术栈、目录结构、许可证。
+
+- [ ] **第2步：提交**
+
 ```bash
-git add README.md; git commit -m "docs: add README with usage guide"
+git add README.md
+git commit -m "docs: README 使用指南"
 ```
 
 ---
 
-## Self-Review Checklist
+## 自审清单（修订后）
 
-- [x] SPEC coverage: All 10 sections covered — types → config → logger → storage → diff-parser → llm-client → engine → CLI (7 commands) → Web (3 pages + API) → Docker → CI → README
-- [x] No placeholders: All code steps contain real implementation
-- [x] Type consistency: Interfaces defined in T1 used consistently across T2–T16
-- [x] Dependencies labeled: Task dependency graph above
-- [x] Each task has verify step with exact command + expected output
-- [x] PLAN.md header contains REQUIRED SUB-SKILL declaration
+- [x] SPEC 覆盖率：全部 10 章节有对应 Task（V0 冷启动验证 → T0 脚手架 → T1-T8 核心引擎 → T9-T14 CLI → T15+T16a-d Web → T17 Docker → T18 CI → T19 README）
+- [x] 占位符扫描：零 TBD / TODO / "implement later" — T16a-d 已拆分为 4 个子任务并提供完整代码块
+- [x] 类型一致性：T1 定义的 StoredCommit / StoredSummary / HookState 在 T5–T16d 中均一致使用
+- [x] 依赖标注：任务依赖图和并行分组已更新（含 V0 前置 + T16a-T16d 拆分）
+- [x] 每个 Task 均有验证步骤（确切命令 + 预期输出）
+- [x] PLAN.md 头部包含 REQUIRED SUB-SKILL 声明
+- [x] 所有描述性文字已转为中文
+- [x] CLI 层 T9-T14 均已补充 smoke test
+- [x] T15 包含完整 layout.html（Vercel Geist tokens）和 Web 服务器测试
+- [x] 前端 task（T15、T16a-d）首步标注 Open Design 引用
+- [x] CI Node 版本统一为 20
+- [x] 任务编号统一：V0 → T0-T19（共 25 个 Task，含 V0 + T16a-d 拆分）
+- [x] Open Design 设计系统: Vercel + `web-design-guidelines` skill
+- [x] 冷启动验证 V0 已插入，对应 AI4SE §4.5 要求

@@ -138,3 +138,35 @@
   - 依赖标注: 依赖图和并行分组已显式标注
 - **人工干预**: 无
 - **学到的教训**: T16 将 Web 的 list/detail/stats/API 四个子模块合并为一个 task——粒度偏粗（实际需 10-15 分钟），后续 subagent 执行时可能需要拆分
+
+---
+
+## [2026-06-14] Phase 2b: PLAN 修订（7 项修复）
+
+### 条目 #6 — 用户审查后批量修订
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `writing-plans`（修订阶段）
+- **关键词**: 自审→发现不足→收到审查意见→修订
+- **人工干预**: 用户提出 7 类修改要求，智能体逐项执行
+- **修订内容**:
+
+| # | 修复项 | 级别 | 内容 |
+|---|--------|------|------|
+| 1 | 插入冷启动验证 V0 | Critical | 在 T0 前新增 V0 section，指定 Aider 作为第二智能体，记录验证过程到 SPEC_PROCESS.md |
+| 2 | T16 拆分 + 完整代码 | Critical | T16 拆为 T16a（列表页）、T16b（详情页）、T16c（统计页）、T16d（API），每个含完整代码块和测试 |
+| 3 | CLI smoke test | Important | T9 补充 `--help` 命令名验证；T10 补充配置读写验证；T12 补充搜索/排序验证；T13 补充缓存/覆盖验证；T14 补充 hook 行为验证 |
+| 4 | T15 完整代码 + 测试 | Important | layout.html 使用 Vercel Geist tokens（`--geist-foreground`/`--geist-background`/`--accents-5`）；补充 5 项 Web 服务器测试 |
+| 5 | Open Design 引用 | Important | T15、T16a-d 每项首步标注 Open Design skill `web-design-guidelines` + Vercel 设计系统路径 |
+| 6 | 统一 Node 版本 | Important | CI `node-version: '18'` → `'20'` |
+| 7 | 修复任务编号 | Minor | 依赖图+正文统一：V0→T0→T1...T16a-d→T17(Docker)→T18(CI)→T19(README)；并行分组更新 |
+
+- **修订后自审**:
+  - SPEC 覆盖率: 全部 10 章 + AI4SE §4.5 冷启动验证
+  - 占位符扫描: 零（T16a-d 全部含完整代码）
+  - CLI 层: 每个命令有对应 smoke test
+  - 版本一致性: CI、PLAN header、package.json 统一 Node >= 18（CI 使用 20）
+- **学到的教训**:
+  - T16 拆分是必要的——原始粒度在 subagent 执行时会因为跨文件依赖导致 subagent 上下文膨胀，拆分后每个 task 聚焦单一页面
+  - Open Design 引用应在指定时立即标注路径（`~/.config/opencode/open-design/design-systems/vercel/DESIGN.md`），否则 subagent 会忽略设计约束
+  - 冷启动验证 V0 是课程强制要求（§4.5），应在 brainstorming 结束后立即列入 PLAN
