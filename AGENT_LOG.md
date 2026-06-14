@@ -296,3 +296,44 @@
   - 基线: package.json 不存在（待 T0 创建），npm test 预期失败（无测试文件）
 - **人工干预**: 无
 - **学到的教训**: 冷启动验证后立即清理是明智的——Aider 产物与正式 T0 实现无关联，保留会造成混淆
+
+---
+
+## [2026-06-14] Phase 5: Subagent-Driven 实现 — Core Engine (T0–T8)
+
+### 条目 #11 — 技术栈调整：better-sqlite3 → sql.js
+
+- **时间戳**: 2026-06-14
+- **原因**: Windows 环境缺少 Visual Studio C++ 编译工具链，且预编译二进制下载因网络波动失败，`better-sqlite3` 无法安装（既有 node-gyp 编译失败又有 ECONNRESET 网络错误）
+- **决策**: 切换为 `sql.js`（纯 JavaScript SQLite，基于 WASM 编译，零原生依赖）
+- **影响**:
+  - `package.json`: `better-sqlite3` → `sql.js ^1.11.0`，移除 `@types/better-sqlite3`
+  - `storage.ts`: API 从同步 `new Database(path)` 变为异步 `await initSqlJs(); new SQL.Database()`；查询从 `db.prepare().run()` 变为 `db.run()`；需手动 `db.export()` 持久化
+  - PLAN.md 的 T4/T5 实现代码需适配 sql.js API
+- **人工干预**: 用户确认选 A（sql.js），智能体执行切换
+
+### 条目 #12 — T0–T8 subagent 驱动实现完成
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `subagent-driven-development`、`test-driven-development`
+- **执行结果**:
+
+| Task | 内容 | Subagent | Commit | 状态 |
+|------|------|----------|--------|------|
+| T0 | 项目脚手架（package.json/tsconfig/vitest + npm install） | 手动执行 | `1d47758` | DONE |
+| T1 | 核心类型定义（8 个 interface） | general | `dcf9c58` | DONE |
+| T2 | 配置模块（JSON 读写 + 环境变量 API Key） | general | `2d4fedf` | DONE |
+| T3 | 日志模块（JSON 行追加写入） | general | `cb9b3d6` | DONE |
+| T4 | 数据库建表（sql.js，3 表 + 2 索引） | general | `8b58c5f` | DONE |
+| T5 | 数据库 CRUD（10 个操作函数） | general | `9070ae2` | DONE |
+| T6 | Diff 解析器（按文件分块 + 截断） | general | `0c16dd6` | DONE |
+| T7 | LLM 客户端（prompt 构建 + 响应解析） | general | `e8c11e9` | DONE |
+| T8 | 核心引擎编排（diff→LLM→缓存 全流程） | general | `3f56ccf` | DONE |
+
+- **测试结果**: **43 tests PASS，7 test files，0 failures**
+- **并行优化**: T2+T3 并行派发（节省 ~30s），T5+T6 并行派发（节省 ~30s）
+- **人工干预**: T0 因纯脚手架无测试逻辑，手动执行而非派发 subagent；better-sqlite3 编译失败后切换 sql.js
+- **学到的教训**:
+  - sql.js 的 API 差异（异步初始化 / 手动 save / 不同查询语法）应在 PLAN.md 的 T4/T5 中提前标注，否则 subagent 在实现时会按 better-sqlite3 API 编码
+  - TDD 的"先红后绿"在 subagent 中自动执行效果良好——每个 subagent 都能独立完成 红→绿→重构→commit 循环
+  - 并行派发需要确认 task 之间确实无文件冲突（如 T2 创建 `config.ts` 和 T3 创建 `logger.ts` 互不影响）
