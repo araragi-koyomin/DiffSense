@@ -337,3 +337,75 @@
   - sql.js 的 API 差异（异步初始化 / 手动 save / 不同查询语法）应在 PLAN.md 的 T4/T5 中提前标注，否则 subagent 在实现时会按 better-sqlite3 API 编码
   - TDD 的"先红后绿"在 subagent 中自动执行效果良好——每个 subagent 都能独立完成 红→绿→重构→commit 循环
   - 并行派发需要确认 task 之间确实无文件冲突（如 T2 创建 `config.ts` 和 T3 创建 `logger.ts` 互不影响）
+
+---
+
+## [2026-06-14] Phase 6: T0-T8 实现审查
+
+### 条目 #13 — 人工审查：源码 vs PLAN.md 对照
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: 无（人工审查，非 agent 流程）
+- **审查范围**: `.worktrees/core-engine` 下 T0-T8 全部源码 + 测试
+
+- **审查方法**:
+  1. 运行 `npm test` → **43 PASS，0 failures** ✅
+  2. 逐文件对照 PLAN.md 的预期代码块
+  3. 检查偏离项的合理性
+
+- **逐文件结果**:
+
+| 源码文件 | 与 PLAN 一致性 | 备注 |
+|----------|---------------|------|
+| `package.json` | ⚠️ 偏离 | better-sqlite3 → sql.js（条目 #11 已记录） |
+| `tsconfig.json` | ✅ 完全一致 | |
+| `vitest.config.ts` | ✅ 完全一致 | |
+| `types.ts` | ✅ 完全一致 | 8 个 interface，多行 + JSDoc 注释 |
+| `config.ts` | ✅ 完全一致 | 5 函数 + 2 默认配置常量 |
+| `logger.ts` | ✅ 完全一致 | logError + 默认路径 |
+| `storage.ts` | ⚠️ 偏离 | sql.js API 替代 better-sqlite3，功能等价 |
+| `diff-parser.ts` | ⚠️ 结构偏离 | `execGitDiff` 未导出，逻辑被内联到 `index.ts` |
+| `llm-client.ts` | ✅ 完全一致 | buildPrompt / parseSummaryResponse / generateSummary |
+| `index.ts` | ⚠️ 结构偏离 | 直接内联 simple-git 调用，未调用 diff-parser 的 `execGitDiff` |
+
+- **偏离项总结**:
+
+| # | 偏离 | 严重度 | 判定 |
+|---|------|--------|------|
+| 1 | sql.js 替代 better-sqlite3 | **正当** | Windows 平台约束，功能等价，测试全覆盖 |
+| 2 | execGitDiff 未从 diff-parser 导出 | **Minor** | 逻辑被内联到 index.ts 的 processCommit，行为一致 |
+
+- **人工干预**: 无（仅审查，未修改代码）
+- **审查结论**: **通过。** 可进入 T9-T14（CLI 层）实现
+- **学到的教训**:
+  - subagent 在 PLAN 代码块与实际库 API 不匹配时（如 sql.js vs better-sqlite3），会选择"功能等价实现"而非"字面遵循"——这是正确的行为，但需要在 PLAN 中标注依赖替换
+  - 函数提取/内联的决策在 subagent 之间不统一（T6 的 execGitDiff 在 T8 中被忽略），说明 subagent 对代码结构的理解受 task 边界限制
+
+---
+
+## [2026-06-14] Phase 7: Subagent-Driven 实现 — CLI 层 (T9–T14)
+
+### 条目 #14 — T9–T14 subagent 驱动实现完成
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `subagent-driven-development`、`test-driven-development`
+- **执行结果**:
+
+| Task | 内容 | Subagent | Commit | 状态 |
+|------|------|----------|--------|------|
+| T9 | CLI 入口骨架（commander + 7 命令占位） | general | `50379f9` | DONE |
+| T10 | ds config 交互式配置命令 | general | `974a327` | DONE |
+| T11 | ds init/uninit 命令（hook 管理） | general | `d5c2738` | DONE |
+| T12 | ds log 命令（表格输出） | general | `20541e5` | DONE |
+| T13 | ds explain/generate 命令（结构化卡片） | general | `c228352` | DONE |
+| T14 | hook-post-commit + ds web 入口 | general | `c06a14a` | DONE |
+| — | CLI 集成（取消注释 + sql.js 类型 + web stub） | 手动 | `8db189e` | DONE |
+
+- **测试结果**: **65 tests PASS，13 test files，0 failures**（+22 tests 来自 CLI 层）
+- **并行优化**: T10–T14 五个 subagent 并行派发
+- **编译修复**: 添加 `src/sql-js.d.ts`（@types/sql-js 不存在于 npm）+ `src/web/index.ts` stub（web 模块 T15 尚未实现）
+- **人工干预**: T9–T14 完成后手动取消 CLI 入口中的命令注册注释，修复 2 个 TS 编译错误
+- **学到的教训**:
+  - CLI 入口作为共享文件（所有命令注册在此），subagent 并行执行时采用"占位注释"策略避免冲突——每个 subagent 只创建自己的命令文件，集成由主 agent 统一完成
+  - `registerWebCommand` 使用动态 import（`await import('../../web/index')`）可避免编译期依赖 web 模块，web 不存在时仅运行时失败
+  - sql.js 缺少官方类型声明文件是已知问题，需手动编写 `.d.ts`
