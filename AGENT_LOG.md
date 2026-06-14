@@ -680,3 +680,87 @@
 - **全量数据**: 21 tasks / 17 subagents / 83 tests / 26 commits / 0 failures
 - **Superpowers 流程**: 7 步全部执行 ✅
 - **偏离记录**: 2 项合理偏离（sql.js、Dockerfile views 路径），已在 AGENT_LOG 中记录
+
+---
+
+## [2026-06-14] Phase 14: Web UI 重构 + Docker Compose + README 重写
+
+### 条目 #24 — 用户需求澄清与 brainstorming
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `brainstorming`
+- **用户提出的 4 个问题**:
+  1. 详情页 diff 截断且排版乱 → 改为文件变更列表
+  2. 列表页逻辑冲突（已分析 commit 却有"分析"选项）
+  3. README 命令复杂，`$(pwd)` Windows 不生效，端口矛盾（3000 vs 9090）
+  4. 需要"展示全部 commit 并选择分析"而非仅显示已分析的
+- **brainstorming 决策**:
+  - 文件变更格式: `M path +12 -3`（BC 组合）
+  - Branch 筛选: 搜索栏下方标签按钮行（方案 B）
+  - 列表页卡片: 已分析/未分析双样式 + branch 颜色区分（方案 B）
+  - 批量操作栏: 多选栏保留，"分析全部"移至顶部固定位置（方案 C）
+  - README: docker-compose 简化命令，端口保持 9090:3000（方案 A）
+  - 服务停止: docker-compose 工作流替代手动 rm -f（方案 A）
+- **人工干预**: 无 — 全部 6 项决策由用户签字确认
+- **学到的教训**: 用户对具体视觉细节有明确偏好（BC 组合格式），brainstorming 应提供具体视觉示例而非抽象描述
+
+### 条目 #25 — writing-plans + worktree 隔离
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `writing-plans` → `using-git-worktrees`
+- **产物**: PLAN.md 追加 Phase 13 tasks（T20-T25，6 个任务，785 行）
+- **worktree**: `.worktrees/phase13-web-redesign`，分支 `feat/phase13-web-redesign`
+- **基线测试**: 86 tests PASS
+- **学到的教训**: 追加模式（而非新建文件）保持了项目一致性，所有 task 共处一个 PLAN.md 便于追溯
+
+### 条目 #26 — subagent-driven development（T24+T25 并行）
+
+- **时间戳**: 2026-06-14
+- **T24 (docker-compose.yml)**:
+  - Subagent 实现 → spec review 发现 `version: '3.8'` 多余 → 修复 → code quality ✅
+  - Commit: `8c1a2fb` + `0c818f4`
+- **T25 (README 重写)**:
+  - Subagent 实现 → spec+quality 联合审查 → ✅ APPROVED
+  - Commit: `0bef8e9`
+  - 去除所有 `$(pwd)` 引用，统一端口 9090，新增 compose 工作流
+
+### 条目 #27 — subagent-driven development（T21+T22+T23 串行）
+
+- **时间戳**: 2026-06-14
+- **T21 (辅助函数)**:
+  - 新增 `CommitWithStatus` interface + `getAllCommitsWithStatus()` + `buildBranchBar()`
+  - 在 pages.ts 中插入，位于 getRepoMeta 和 registerPageRoutes 之间
+  - Subagent TDD: 先写测试 → FAIL → 实现 → PASS → commit `df3d3fc`
+  - 审查: ✅ 全部 2 项 spec + 5 项 quality
+- **T22 (路由 + 模板)**:
+  - 重写 GET / 路由（git log → 全部 commit → 标注状态 → 双样式卡片）
+  - 重写 list.html（branch-bar + top-actions + checkbox-only batch bar）
+  - TDD: 5 个测试先 FAIL 后 PASS → commit `2ba46df`
+  - 审查: ✅ 12/12 spec 项 + 5/5 quality 项
+- **T23 (CSS)**:
+  - layout.html 添加 11 个新 CSS 规则（branch-bar, branch-btn, top-actions, status-badge 等）
+  - Commit: `1ada328`
+
+### 条目 #28 — T20 详情页文件变更列表
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `test-driven-development` + `subagent-driven-development`
+- **实现内容**:
+  - pages.ts 详情路由: `git diff --name-status` + `git diff --numstat` → FileChange[] → HTML
+  - detail.html: `{{{diffSnippet}}}` → `{{{fileChanges}}}`
+  - layout.html: 新增 file-change-list / file-change-item / file-status 等 10 个 CSS 规则
+  - 初始 commit 回退: `git show --diff-filter=A --name-status` + `--numstat`
+- TDD: 2 tests → FAIL → 实现 → PASS → commit `2df7731`
+- **全量**: 95 tests PASS（22 files）
+
+### 条目 #29 — finishing + PR
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `finishing-a-development-branch`
+- **最终测试**: 95 tests / 22 files / 0 failures
+- **PR**: https://github.com/araragi-koyomin/DiffSense/pull/2
+- **commits**: 9 个（含 1 个 review fix）
+- **学到的教训**:
+  - 并行派发 T24+T25 节省时间，但 serial 派发 T21→T22→T23→T20 确保 pages.ts 和 layout.html 不会冲突
+  - Subagent 在 6 个 task 中全部主动报告 DONE，无 BLOCKED 或 NEEDS_CONTEXT — 说明 PLAN.md task 粒度仍然有效
+  - 两阶段评审在 T24 捕获了 `version: '3.8'` 多余字段，证明 review 机制的价值
