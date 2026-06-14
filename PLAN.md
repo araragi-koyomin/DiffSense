@@ -1585,3 +1585,788 @@ git commit -m "docs: README 使用指南"
 - [x] 任务编号统一：V0 → T0-T19（共 25 个 Task，含 V0 + T16a-d 拆分）
 - [x] Open Design 设计系统: Vercel + `web-design-guidelines` skill
 - [x] 冷启动验证 V0 已插入，对应 AI4SE §4.5 要求
+
+---
+
+## Phase 13: Web UI 重构 + Docker Compose + README 重写
+
+> **致智能体工作者:** 必需的子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 来逐任务实现本计划。步骤使用复选框（`- [ ]`）语法进行跟踪。
+
+**目标:** 重构 Web 界面（详情页文件变更列表、列表页展示全部 commit 并支持 branch 筛选、批量操作栏重构），新增 docker-compose.yml 简化部署，重写 README。
+
+**架构:** 修改现有文件，不新增模块。详情页用 `git diff --name-status` + `git diff --numstat` 生成文件变更列表替代原始 diff。列表页用 `git log` 获取全部 commit 后 LEFT JOIN summaries 表标注分析状态。Branch 筛选通过 `git log <branch>` 实现。
+
+**设计系统:** Vercel + `web-design-guidelines`（Open Design）
+
+### 任务依赖图（Phase 13）
+
+```
+T20（详情页文件变更列表）
+  └─ T21（列表页辅助函数）
+       └─ T22（列表页路由 + 模板重写）
+            └─ T23（CSS + JS 完善）
+T24（docker-compose.yml）← 独立并行
+T25（README 重写）← 独立并行
+```
+
+---
+
+### T20: 详情页 — 用文件变更列表替代原始 diff
+
+**涉及文件:**
+- 修改: `src/web/routes/pages.ts:122-153`
+- 修改: `src/web/views/detail.html:23-26`
+- 修改: `src/web/views/layout.html:61`（新增 CSS）
+- 新增: `tests/web/detail-file-change.test.ts`
+
+- [ ] **第1步：编写失败测试**
+
+```typescript
+// tests/web/detail-file-change.test.ts
+import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+
+describe('详情页 — 文件变更列表', () => {
+  const detailPath = path.join(__dirname, '..', '..', 'src', 'web', 'views', 'detail.html');
+  const layoutPath = path.join(__dirname, '..', '..', 'src', 'web', 'views', 'layout.html');
+
+  it('detail.html 使用 fileChanges 变量而非 diffSnippet', () => {
+    const c = fs.readFileSync(detailPath, 'utf-8');
+    expect(c).toContain('{{{fileChanges}}}');
+    expect(c).not.toContain('{{{diffSnippet}}}');
+  });
+
+  it('layout.html 包含文件变更列表 CSS 类', () => {
+    const c = fs.readFileSync(layoutPath, 'utf-8');
+    expect(c).toContain('.file-change-list');
+    expect(c).toContain('.file-change-item');
+    expect(c).toContain('.file-status');
+    expect(c).toContain('.file-add');
+    expect(c).toContain('.file-del');
+  });
+});
+```
+
+- [ ] **第2步：运行测试确认失败**
+
+```bash
+npx vitest run tests/web/detail-file-change.test.ts
+```
+预期: 2 tests FAIL — `detail.html` 仍含 `diffSnippet`，`layout.html` 缺少新 CSS 类。
+
+- [ ] **第3步：在 pages.ts 详情路由中实现文件变更列表逻辑**
+
+替换 `src/web/routes/pages.ts` 第122-131行（`// fetch diff snippet` 块）：
+
+```typescript
+    // fetch file change list (status + path + line counts)
+    interface FileChange { status: string; path: string; added: number; deleted: number; }
+    let fileChanges: FileChange[] = [];
+    try {
+      const sg = (await import('simple-git')).default;
+      const git = sg(rp);
+      let nameStatusOut = '';
+      let numstatOut = '';
+      try {
+        nameStatusOut = await git.raw(['diff', '--name-status', `${hash}^..${hash}`]);
+        numstatOut = await git.raw(['diff', '--numstat', `${hash}^..${hash}`]);
+      } catch {
+        // initial commit (no parent): use git show instead
+        try {
+          nameStatusOut = await git.raw(['show', '--diff-filter=A', '--name-status', '--format=', hash]);
+          numstatOut = await git.raw(['show', '--numstat', '--format=', hash]);
+        } catch {}
+      }
+      const nameLines = nameStatusOut.trim().split('\n').filter(l => l.trim());
+      const numLines = numstatOut.trim().split('\n').filter(l => l.trim());
+      for (let i = 0; i < nameLines.length; i++) {
+        const parts = nameLines[i].split('\t');
+        const status = parts[0] || 'M';
+        const fpath = parts.slice(1).join('\t');
+        const numParts = (numLines[i] || '').split('\t');
+        fileChanges.push({
+          status,
+          path: fpath,
+          added: parseInt(numParts[0]) || 0,
+          deleted: parseInt(numParts[1]) || 0,
+        });
+      }
+    } catch {}
+
+    const fileChangeHtml = fileChanges.length
+      ? fileChanges.map(f => {
+          const cls = f.status === 'A' ? 'file-add' : f.status === 'D' ? 'file-del' : f.status === 'R' ? 'file-rename' : 'file-mod';
+          return `<div class="file-change-item ${cls}"><span class="file-status">${escapeHtml(f.status)}</span><span class="file-path">${escapeHtml(f.path)}</span><span class="file-stats">+${f.added} -${f.deleted}</span></div>`;
+        }).join('')
+      : '<p style="color:var(--accents-5);padding:0.75rem;">无文件变更</p>';
+```
+
+同时把第146-154行的 `diffSnippet` 改为 `fileChanges`：
+
+```typescript
+    res.send(render('detail', {
+      activeList: '', activeStats: '', hash: summary.commit_hash.substring(0, 7), fullHash: summary.commit_hash,
+      author: escapeHtml(commit?.author || 'N/A'), date: (commit?.date || '').substring(0, 10), message: escapeHtml(commit?.message || 'N/A'),
+      summary: escapeHtml(summary.summary), intent: escapeHtml(summary.intent || ''), scopeTags: scopeTags || '无',
+      risk: escapeHtml(summary.risk || 'N/A'), riskClass, truncatedWarning,
+      model: summary.model || 'N/A', tokensUsed: String(summary.tokens_used || 'N/A'),
+      fileChanges: fileChangeHtml,
+      ghLink,
+    }));
+```
+
+- [ ] **第4步：修改 detail.html 模板**
+
+将 `src/web/views/detail.html` 第23-26行：
+
+```html
+  <div style="margin:1.25rem 0;">
+    <h3 style="margin-bottom:0.25rem;">📋 Diff 预览</h3>
+    <pre class="diff-preview">{{{diffSnippet}}}</pre>
+  </div>
+```
+
+替换为：
+
+```html
+  <div style="margin:1.25rem 0;">
+    <h3 style="margin-bottom:0.25rem;">📋 文件变更</h3>
+    <div class="file-change-list">{{{fileChanges}}}</div>
+  </div>
+```
+
+- [ ] **第5步：在 layout.html 中添加 CSS**
+
+在 `src/web/views/layout.html` 的 `<style>` 块末尾（`@media` 之前）插入：
+
+```css
+    .file-change-list { border:1px solid var(--accents-2); border-radius:var(--geist-radius); overflow:hidden; }
+    .file-change-item { display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.75rem; font-family:var(--font-mono); font-size:0.8rem; border-bottom:1px solid var(--accents-1); }
+    .file-change-item:last-child { border-bottom:none; }
+    .file-status { width:1.2rem; text-align:center; font-weight:600; font-size:0.75rem; }
+    .file-add .file-status { color:#007c40; }
+    .file-del .file-status { color:var(--geist-error); }
+    .file-rename .file-status { color:#d4a111; }
+    .file-mod .file-status { color:var(--accents-5); }
+    .file-path { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .file-stats { color:var(--accents-5); font-size:0.75rem; white-space:nowrap; }
+```
+
+- [ ] **第6步：运行测试确认全部通过**
+
+```bash
+npx vitest run tests/web/detail-file-change.test.ts tests/web/server.test.ts
+```
+预期: 全部 PASS。
+
+- [ ] **第7步：提交**
+
+```bash
+git add src/web/routes/pages.ts src/web/views/detail.html src/web/views/layout.html tests/web/detail-file-change.test.ts
+git commit -m "feat: 详情页用文件变更列表（M/A/D/R + 路径 + 行数）替代原始 diff（T20）"
+```
+
+---
+
+### T21: 列表页辅助函数 — 从 git log 获取全部 commit 并标注分析状态
+
+**涉及文件:**
+- 修改: `src/web/routes/pages.ts:1-56`（新增辅助函数）
+- 新增: `tests/web/list-all-commits.test.ts`
+
+- [ ] **第1步：编写失败测试**
+
+```typescript
+// tests/web/list-all-commits.test.ts
+import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+
+describe('列表页 — 全部 commit 辅助逻辑', () => {
+  const pagesPath = path.join(__dirname, '..', '..', 'src', 'web', 'routes', 'pages.ts');
+
+  it('pages.ts 导出 getAllCommitsWithStatus', async () => {
+    const src = fs.readFileSync(pagesPath, 'utf-8');
+    expect(src).toContain('getAllCommitsWithStatus');
+    expect(src).toContain('CommitWithStatus');
+    expect(src).toContain('hasSummary');
+    expect(src).toContain('git.raw([\'log\''); // uses git log, not just DB
+  });
+
+  it('pages.ts 中含 BranchBar 生成逻辑', () => {
+    const src = fs.readFileSync(pagesPath, 'utf-8');
+    expect(src).toContain('branchBar');
+    expect(src).toContain('branchLocal');
+  });
+});
+```
+
+- [ ] **第2步：运行测试确认失败**
+
+```bash
+npx vitest run tests/web/list-all-commits.test.ts
+```
+预期: 2 tests FAIL — `getAllCommitsWithStatus` 和 `branchBar` 尚不存在。
+
+- [ ] **第3步：在 pages.ts 顶部添加辅助函数**
+
+在 `src/web/routes/pages.ts` 的 `getRepoMeta` 函数之后（第56行后）、`registerPageRoutes` 之前，插入：
+
+```typescript
+interface CommitWithStatus {
+  hash: string; author: string; date: string; message: string;
+  branch: string; hasSummary: boolean;
+  summary?: string; model?: string; risk?: string; scope?: string[];
+}
+
+async function getAllCommitsWithStatus(
+  rp: string, dbPath: string, branch?: string, maxCount: number = 200
+): Promise<CommitWithStatus[]> {
+  const sg = (await import('simple-git')).default;
+  const git = sg(rp);
+  const branchArg = (branch && branch !== '__all__') ? branch : '--all';
+  let logText = '';
+  try {
+    logText = await git.raw(['log', branchArg, '--format=%H%n%an%n%aI%n%s', `--max-count=${maxCount}`]);
+  } catch {
+    return [];
+  }
+  const lines = logText.trim().split('\n');
+  const commits: CommitWithStatus[] = [];
+  for (let i = 0; i + 3 < lines.length; i += 4) {
+    const h = lines[i]; if (!h) continue;
+    commits.push({ hash: h, author: lines[i + 1] || '', date: lines[i + 2] || '', message: lines[i + 3] || '', branch: '', hasSummary: false });
+  }
+
+  // resolve branch per commit
+  try {
+    const brs = await git.branchLocal();
+    for (const br of Object.keys(brs.branches)) {
+      const bl = await git.raw(['log', br, '--format=%H', `--max-count=${maxCount}`]);
+      for (const c of bl.trim().split('\n')) {
+        if (c) { const found = commits.find(x => x.hash === c); if (found && !found.branch) found.branch = br; }
+      }
+    }
+  } catch {}
+
+  // annotate with summary status from DB
+  if (fs.existsSync(dbPath)) {
+    await initDatabase(dbPath);
+    for (const c of commits) {
+      const s = getSummaryByHash(dbPath, rp, c.hash);
+      if (s) {
+        c.hasSummary = true;
+        c.summary = s.summary;
+        c.model = s.model;
+        c.risk = s.risk;
+        c.scope = JSON.parse(s.scope || '[]');
+      }
+    }
+    closeDatabase(dbPath);
+  }
+
+  return commits;
+}
+
+async function buildBranchBar(rp: string, activeBranch: string, searchVal: string): Promise<string> {
+  const sg = (await import('simple-git')).default;
+  let branches: string[] = [];
+  try { branches = Object.keys((await sg(rp).branchLocal()).branches); } catch {}
+  const searchQ = searchVal ? `&q=${encodeURIComponent(searchVal)}` : '';
+  let html = `<a href="/?${searchQ ? 'q=' + encodeURIComponent(searchVal) : ''}" class="branch-btn${activeBranch === '__all__' || !activeBranch ? ' active' : ''}">全部</a>`;
+  for (const br of branches) {
+    const active = activeBranch === br ? ' active' : '';
+    html += `<a href="/?branch=${encodeURIComponent(br)}${searchQ}" class="branch-btn${active}">${escapeHtml(br)}</a>`;
+  }
+  return html;
+}
+```
+
+- [ ] **第4步：运行测试确认通过**
+
+```bash
+npx vitest run tests/web/list-all-commits.test.ts
+```
+预期: 2 tests PASS。
+
+- [ ] **第5步：提交**
+
+```bash
+git add src/web/routes/pages.ts tests/web/list-all-commits.test.ts
+git commit -m "feat: 添加 getAllCommitsWithStatus + buildBranchBar 辅助函数（T21）"
+```
+
+---
+
+### T22: 列表页路由重写 — GET / 展示全部 commit + branch 筛选 + 搜索
+
+**涉及文件:**
+- 修改: `src/web/routes/pages.ts:58-105`（GET / 路由）
+- 修改: `src/web/views/list.html`（模板）
+- 新增: `tests/web/list-route.test.ts`
+
+- [ ] **第1步：编写失败测试**
+
+```typescript
+// tests/web/list-route.test.ts
+import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+
+describe('列表页路由', () => {
+  const pagesPath = path.join(__dirname, '..', '..', 'src', 'web', 'routes', 'pages.ts');
+  const listPath = path.join(__dirname, '..', '..', 'src', 'web', 'views', 'list.html');
+
+  it('GET / 使用 getAllCommitsWithStatus 而非 getSummariesByRepo', () => {
+    const src = fs.readFileSync(pagesPath, 'utf-8');
+    expect(src).toContain('getAllCommitsWithStatus');
+    // 不应再仅依赖 summaries 表
+    const afterRoute = src.substring(src.indexOf("app.get('/',"));
+    expect(afterRoute).toContain('getAllCommitsWithStatus');
+  });
+
+  it('list.html 含 branch-bar div', () => {
+    const c = fs.readFileSync(listPath, 'utf-8');
+    expect(c).toContain('class="branch-bar"');
+    expect(c).toContain('{{{branchBar}}}');
+  });
+
+  it('list.html 含 top-actions（分析全部按钮移至顶部）', () => {
+    const c = fs.readFileSync(listPath, 'utf-8');
+    expect(c).toContain('class="top-actions"');
+    expect(c).toContain('analyzeAll()');
+  });
+
+  it('list.html 批量栏无"分析全部未生成"按钮', () => {
+    const c = fs.readFileSync(listPath, 'utf-8');
+    const batchSection = c.substring(c.indexOf('batch-bar'), c.indexOf('</form>'));
+    expect(batchSection).not.toContain('分析全部未生成');
+  });
+
+  it('list.html 含 status-badge（已分析/未分析）', () => {
+    const c = fs.readFileSync(listPath, 'utf-8');
+    expect(c).toContain('status-badge');
+    expect(c).toContain('analyzed');
+  });
+});
+```
+
+- [ ] **第2步：运行测试确认失败**
+
+```bash
+npx vitest run tests/web/list-route.test.ts
+```
+预期: 5 tests FAIL。
+
+- [ ] **第3步：重写 GET / 路由**
+
+替换 `src/web/routes/pages.ts` 第62-105行（整个 `app.get('/')` 处理函数）：
+
+```typescript
+  // ========== GET / — 列表页（全部 commit + branch 筛选 + 搜索 + 分页） ==========
+  app.get('/', async (req: Request, res: Response) => {
+    const search = (req.query.q as string) || '';
+    const branch = (req.query.branch as string) || '__all__';
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = 20;
+
+    const branchBar = await buildBranchBar(rp, branch, search);
+    const commits = await getAllCommitsWithStatus(rp, dbPath, branch);
+
+    // search filter
+    let filtered = commits;
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = commits.filter(c =>
+        c.message.toLowerCase().includes(q) ||
+        (c.summary && c.summary.toLowerCase().includes(q))
+      );
+    }
+
+    // pagination
+    const total = filtered.length;
+    const offset = (page - 1) * limit;
+    const paged = filtered.slice(offset, offset + limit);
+
+    if (total === 0) {
+      res.send(render('list', {
+        activeList: 'active', activeStats: '', rows: '<p style="text-align:center;color:var(--accents-5);">暂无 commit 记录。</p>',
+        pagination: '', searchVal: escapeHtml(search), branchBar, githubUrl: '', progressBar: '',
+      }));
+      return;
+    }
+
+    const { githubUrl } = await getRepoMeta(rp);
+
+    let rows = '';
+    for (const c of paged) {
+      const hash7 = c.hash.substring(0, 7);
+      const date = (c.date || '').substring(0, 10);
+      const author = escapeHtml(c.author);
+      const bc = branchColor(c.branch);
+      const branchBadge = c.branch ? `<span class="branch-badge" style="border-color:${bc};color:${bc};">${escapeHtml(c.branch)}</span>` : '';
+
+      if (c.hasSummary && c.summary) {
+        // analyzed card
+        let riskClass = 'risk-low';
+        if (c.risk && c.risk.includes('高')) riskClass = 'risk-high';
+        else if (c.risk && c.risk.includes('中')) riskClass = 'risk-mid';
+        const scope = c.scope || [];
+        const scopeTags = scope.slice(0, 3).map((f: string) => `<span class="scope-mini">${escapeHtml((f.split('/').pop() || f))}</span>`).join(' ');
+        const scopeMore = scope.length > 3 ? ` <span style="color:var(--accents-5);font-size:0.7rem;">+${scope.length - 3}</span>` : '';
+        const ghLink = githubUrl ? `<a class="gh-link" href="${githubUrl}/commit/${c.hash}" target="_blank">&#8599;</a>` : '';
+
+        rows += `<div class="card card-analyzed" style="border-left:3px solid ${bc};"><div class="card-body"><div class="card-top"><span class="hash">${hash7}</span> ${branchBadge} <span style="margin-left:0.25rem;font-size:0.7rem;color:var(--accents-5);">${c.model||'N/A'}</span> ${ghLink} <span class="status-badge analyzed">已分析</span></div><div class="summary-line"><a href="/commits/${c.hash}" style="color:inherit;text-decoration:none;">${escapeHtml(c.summary)}</a></div><div class="meta">${date} &middot; ${author}${c.risk?' &middot; <span class="'+riskClass+'">'+escapeHtml(c.risk)+'</span>':''}</div>${scopeTags ? '<div style="margin-top:0.4rem;">'+scopeTags+scopeMore+'</div>' : ''}</div></div>`;
+      } else {
+        // unanalyzed card — has checkbox
+        rows += `<div class="card card-unanalyzed" style="border-left:3px solid ${bc};opacity:0.75;"><label class="card-check"><input type="checkbox" class="commit-checkbox" value="${c.hash}" onchange="toggleSelect('${c.hash}', this)" /></label><div class="card-body"><div class="card-top"><span class="hash">${hash7}</span> ${branchBadge} <span class="status-badge unanalyzed">未分析</span></div><div class="summary-line" style="color:var(--accents-5);">${escapeHtml(c.message)}</div><div class="meta">${date} &middot; ${author}</div></div></div>`;
+      }
+    }
+
+    const hasMore = offset + limit < total;
+    const pagination = hasMore
+      ? `<div class="pagination"><a class="btn btn-secondary" href="/?branch=${encodeURIComponent(branch)}&q=${encodeURIComponent(search)}&page=${page + 1}">加载更多（${total - offset - limit} 条剩余）</a></div>`
+      : '';
+
+    res.send(render('list', {
+      activeList: 'active', activeStats: '', rows, pagination,
+      searchVal: escapeHtml(search), branchBar, githubUrl, progressBar: '',
+    }));
+  });
+```
+
+- [ ] **第4步：重写 list.html 模板**
+
+替换整个 `src/web/views/list.html`：
+
+```html
+<div class="search-bar">
+  <input type="text" name="q" placeholder="搜索 commit message 或摘要..." value="{{searchVal}}"
+    hx-get="/" hx-trigger="keyup changed delay:300ms" hx-target="body" />
+</div>
+
+<div class="branch-bar">{{{branchBar}}}</div>
+
+<div class="top-actions">
+  <button class="btn btn-secondary" onclick="analyzeAll()">分析全部未生成</button>
+</div>
+
+<div id="progress-bar" class="progress-bar" style="display:none;">
+  <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+  <span id="progress-text" class="progress-text"></span>
+</div>
+
+<div class="batch-bar" id="batch-bar" style="display:none;">
+  <span id="batch-count">已选 0 项</span>
+  <button class="btn" onclick="batchAnalyze()">分析选中</button>
+</div>
+
+<form id="commit-form">
+<div id="commit-list">{{{rows}}}</div>
+</form>
+{{{pagination}}}
+
+<script>
+let pollTimer = null;
+let currentJobId = '';
+
+function toggleSelect(hash, el) {
+  el.closest('.card').classList.toggle('selected', el.checked);
+  updateBatchBar();
+}
+
+function updateBatchBar() {
+  const checked = document.querySelectorAll('.commit-checkbox:checked');
+  const bar = document.getElementById('batch-bar');
+  const count = document.getElementById('batch-count');
+  if (checked.length > 0) {
+    bar.style.display = 'flex';
+    count.textContent = '已选 ' + checked.length + ' 项';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function getSelectedHashes() {
+  return Array.from(document.querySelectorAll('.commit-checkbox:checked')).map(cb => cb.value);
+}
+
+function showProgress(current, total, text) {
+  const bar = document.getElementById('progress-bar');
+  const fill = document.getElementById('progress-fill');
+  const txt = document.getElementById('progress-text');
+  bar.style.display = 'block';
+  fill.style.width = total ? Math.round(current / total * 100) + '%' : '0%';
+  txt.textContent = text || (current + ' / ' + total);
+}
+
+function hideProgress() {
+  document.getElementById('progress-bar').style.display = 'none';
+}
+
+function startPoll(jobId) {
+  currentJobId = jobId;
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    const resp = await fetch('/api/analyze-progress?jobId=' + jobId);
+    const { data } = await resp.json();
+    showProgress(data.completed, data.total, data.current ? '正在: ' + data.current : '');
+    if (data.done) {
+      clearInterval(pollTimer);
+      hideProgress();
+      location.reload();
+    }
+  }, 800);
+}
+
+async function batchAnalyze() {
+  const hashes = getSelectedHashes();
+  if (!hashes.length) return;
+  const resp = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hashes })
+  });
+  const { data } = await resp.json();
+  if (data.jobId) startPoll(data.jobId);
+}
+
+async function analyzeAll() {
+  if (!confirm('将分析仓库中所有未生成摘要的 commit，可能需要较长时间。继续？')) return;
+  const resp = await fetch('/api/analyze-all', { method: 'POST' });
+  const { data } = await resp.json();
+  if (data.skipped > 0 && data.total === 0) {
+    alert('所有 commit 均已生成摘要（' + data.skipped + ' 条）');
+    return;
+  }
+  if (data.jobId) startPoll(data.jobId);
+}
+</script>
+```
+
+- [ ] **第5步：运行测试确认通过**
+
+```bash
+npx vitest run tests/web/list-route.test.ts tests/web/list-all-commits.test.ts tests/web/server.test.ts
+```
+预期: 全部 PASS。
+
+- [ ] **第6步：提交**
+
+```bash
+git add src/web/routes/pages.ts src/web/views/list.html tests/web/list-route.test.ts tests/web/list-all-commits.test.ts
+git commit -m "feat: 列表页展示全部 commit + branch 筛选 + 双样式卡片（T21+T22）"
+```
+
+---
+
+### T23: CSS 补充 — 新组件样式（branch bar、top-actions、status-badge、card 变体）
+
+**涉及文件:**
+- 修改: `src/web/views/layout.html:46-66`（CSS 块）
+
+- [ ] **第1步：在 layout.html CSS 中追加新样式**
+
+在 `src/web/views/layout.html` 的 `<style>` 块中，`.card-top` 样式之后、footer 样式之前插入：
+
+```css
+    .branch-bar { display:flex; gap:0.35rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .branch-btn { display:inline-block; padding:0.2rem 0.6rem; font-size:0.75rem; border:1px solid var(--accents-2); border-radius:var(--geist-radius); text-decoration:none; color:var(--accents-5); cursor:pointer; }
+    .branch-btn:hover { border-color:var(--geist-foreground); color:var(--geist-foreground); }
+    .branch-btn.active { border-color:var(--geist-foreground); color:var(--geist-foreground); background:var(--accents-1); }
+    .top-actions { display:flex; justify-content:flex-end; margin-bottom:1rem; }
+    .card-analyzed { border-left:3px solid var(--accents-3); }
+    .card-unanalyzed { opacity:0.75; }
+    .card-unanalyzed:hover { opacity:1; }
+    .status-badge { display:inline-block; padding:0.1rem 0.4rem; border-radius:3px; font-size:0.65rem; vertical-align:middle; }
+    .status-badge.analyzed { background:#e6f4ea; color:#007c40; }
+    .status-badge.unanalyzed { background:var(--accents-1); color:var(--accents-5); }
+```
+
+- [ ] **第2步：运行全部测试**
+
+```bash
+npx vitest run
+```
+预期: 全部 86+ tests PASS。
+
+- [ ] **第3步：提交**
+
+```bash
+git add src/web/views/layout.html
+git commit -m "style: 添加 branch-bar / top-actions / status-badge / card-analyzed 样式（T23）"
+```
+
+---
+
+### T24: docker-compose.yml — 简化部署命令
+
+**涉及文件:**
+- 新增: `docker-compose.yml`
+- 修改: `Dockerfile:17`（可选，ENTRYPOINT 调整以兼容 compose command）
+
+- [ ] **第1步：创建 docker-compose.yml**
+
+```yaml
+version: '3.8'
+
+services:
+  diffsense:
+    image: ghcr.io/araragi-koyomin/diffsense:latest
+    container_name: diffsense
+    ports:
+      - '9090:3000'
+    volumes:
+      - .:/repo
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    command: web -r /repo
+```
+
+- [ ] **第2步：提交**
+
+```bash
+git add docker-compose.yml
+git commit -m "feat: 添加 docker-compose.yml，简化部署（T24）"
+```
+
+---
+
+### T25: README.md — 全面重写
+
+**涉及文件:**
+- 修改: `README.md`
+
+- [ ] **第1步：重写 README.md**
+
+```markdown
+# DiffSense — 代码变更语义解释器
+
+AI 驱动的 git commit 语义摘要工具。让 `git diff` 不仅能告诉你**改了什么**，还能告诉你**为什么改**。
+
+## 快速开始（Docker + docker-compose）
+
+```bash
+# 1. 拉取镜像
+docker pull ghcr.io/araragi-koyomin/diffsense:latest
+
+# 2. 配置 API Key
+export DEEPSEEK_API_KEY="sk-xxx"
+
+# 3. 初始化（在你的 git 仓库目录下）
+docker-compose run --rm diffsense init -r /repo
+docker-compose run --rm diffsense config -r /repo
+```
+
+## 使用方式
+
+### Web 界面（推荐）
+
+```bash
+docker-compose up
+# 访问 http://localhost:9090
+# 停止: Ctrl+C
+```
+
+### CLI 命令
+
+```bash
+# 查看摘要列表
+docker-compose run --rm diffsense log -r /repo
+
+# 查看某次 commit 的详细摘要
+docker-compose run --rm diffsense explain HEAD -r /repo
+
+# 强制生成摘要（覆盖缓存）
+docker-compose run --rm diffsense generate HEAD -r /repo
+
+# 卸载 hook
+docker-compose run --rm diffsense uninit -r /repo
+```
+
+## 从源码安装
+
+```bash
+git clone https://github.com/araragi-koyomin/DiffSense.git
+cd DiffSense
+npm install && npm run build
+npm link                # 注册全局命令 ds
+```
+
+## CLI 命令
+
+| 命令 | 说明 |
+|------|------|
+| `ds init` | 在当前仓库安装 post-commit hook |
+| `ds uninit` | 卸载 post-commit hook |
+| `ds config` | 交互式配置 LLM provider |
+| `ds log [-n 10]` | 查看最近 commit 的摘要列表 |
+| `ds explain <ref>` | 查看某次 commit 的详细结构化摘要 |
+| `ds generate <ref>` | 强制为指定 commit 生成摘要 |
+| `ds web` | 启动本地 Web 界面 |
+
+## Web 界面 (http://localhost:3000)
+
+三个页面：
+- **摘要列表** — 展示仓库全部 commit，按 branch 筛选，勾选未分析的 commit 批量分析
+- **详情页** — 完整结构化卡片（摘要 / 意图 / 影响范围 / 风险 / 文件变更列表）
+- **统计面板** — 月度趋势图、模型使用分布、Token 消耗统计
+
+## 环境变量
+
+| 变量 | 说明 |
+|------|------|
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 |
+| `GLM_API_KEY` | 智谱 GLM API 密钥 |
+| `DEEPSEEK_BASE_URL` | DeepSeek API 地址（可选） |
+| `GLM_BASE_URL` | GLM API 地址（可选） |
+
+## 技术栈
+
+- **语言**: TypeScript / Node.js 18+
+- **CLI**: commander + chalk
+- **Web**: Express + SSR（Vercel Geist 设计系统）
+- **存储**: SQLite（sql.js）
+- **LLM**: OpenAI 兼容协议（DeepSeek / 智谱 GLM-4-Flash）
+- **测试**: vitest
+
+## 项目结构
+
+```
+src/
+├── cli/          # CLI 入口 + 命令
+├── core/         # 核心引擎（diff 解析 / LLM / 存储）
+├── web/          # Web 服务 + 路由 + 视图
+└── types.ts
+tests/
+├── core/         # 引擎单元测试
+├── cli/          # CLI 集成测试
+└── web/          # Web 测试
+```
+```
+
+- [ ] **第2步：运行测试确认无回归**
+
+```bash
+npx vitest run
+```
+预期: 全部 PASS。
+
+- [ ] **第3步：提交**
+
+```bash
+git add README.md
+git commit -m "docs: README 重写 — docker-compose 简化命令 + 平台通用说明（T25）"
+```
+
+---
+
+## Phase 13 自审清单
+
+- [ ] SPEC 覆盖率：6 项设计决策全部有对应 Task（T20 详情页文件列表 / T21+T22 列表页全部 commit / T23 样式完善 / T24 compose / T25 README）
+- [ ] 占位符扫描：零 TBD / TODO
+- [ ] 类型一致性：`CommitWithStatus` 接口在 T21 定义，T22 使用
+- [ ] 依赖标注：T21→T22→T23 串行；T20、T24、T25 可并行
+- [ ] 每个 Task 均有验证步骤（确切命令 + 预期输出）
+- [ ] 设计系统: Vercel Geist CSS tokens（无新增外部依赖）
