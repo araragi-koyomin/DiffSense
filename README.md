@@ -4,27 +4,31 @@ AI 驱动的 git commit 语义摘要工具。让 `git diff` 不仅能告诉你**
 
 ## 快速开始
 
+### 方式一：Docker（推荐）
+
 ```bash
-# 1. 安装
-npm install -g diffsense
+docker pull ghcr.io/araragi-koyomin/diffsense:latest
 
-# 2. 配置 LLM provider（交互式）
+# CLI 模式
+docker run diffsense config
+docker run -e DEEPSEEK_API_KEY="sk-xxx" diffsense explain HEAD
+
+# Web 模式
+docker run -p 3000:3000 diffsense web
+```
+
+### 方式二：从源码安装
+
+```bash
+git clone https://github.com/araragi-koyomin/DiffSense.git
+cd DiffSense
+npm install
+npm run build
+npm link          # 注册全局命令 ds
+
+# 后续步骤同 Docker 方式
 ds config
-
-# 3. 设置 API Key
-export DEEPSEEK_API_KEY="your-deepseek-key"
-# 或
-export GLM_API_KEY="your-glm-key"
-
-# 4. 在 Git 仓库中初始化
-cd your-project
-ds init
-
-# 5. 正常 commit，摘要自动生成
-git commit -m "fix: 修复登录并发问题"
-
-# 6. 查看摘要
-ds log
+export DEEPSEEK_API_KEY="your-key"
 ```
 
 ## CLI 命令
@@ -50,20 +54,6 @@ ds web
 - **摘要列表** — 搜索、分页、浏览所有 commit 摘要
 - **详情页** — 完整结构化卡片（摘要 / 意图 / 影响范围 / 风险）
 - **统计面板** — 月度趋势图、模型使用分布、Token 消耗统计
-
-## Docker 使用
-
-```bash
-# 构建
-docker build -t diffsense .
-
-# CLI 模式
-docker run diffsense log
-docker run diffsense explain HEAD
-
-# Web 模式
-docker run -p 3000:3000 diffsense web
-```
 
 ## 环境变量
 
