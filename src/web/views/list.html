@@ -1,0 +1,5 @@
+<div class="search-bar">
+  <input type="text" name="q" placeholder="搜索 commit message 或摘要..." value="{{searchVal}}" hx-get="/" hx-trigger="keyup changed delay:300ms" hx-target="body" />
+</div>
+<div id="commit-list">{{{rows}}}</div>
+{{{pagination}}}

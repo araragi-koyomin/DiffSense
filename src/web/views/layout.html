@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DiffSense — 代码变更语义解释器</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --geist-foreground: #171717;
+      --geist-background: #ffffff;
+      --accents-1: #fafafa; --accents-2: #eaeaea;
+      --accents-3: #d4d4d4; --accents-5: #737373;
+      --accents-8: #262626;
+      --geist-error: #e00; --geist-success: #0070f3;
+      --geist-radius: 6px;
+      --font-mono: 'SF Mono','Fira Code','Cascadia Code',monospace;
+      --font-sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:var(--font-sans); color:var(--geist-foreground); background:var(--geist-background); line-height:1.6; max-width:960px; margin:0 auto; padding:2rem 1.5rem; }
+    nav { display:flex; gap:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--accents-2); margin-bottom:2rem; }
+    nav a { color:var(--accents-5); text-decoration:none; font-size:0.9rem; font-weight:500; }
+    nav a:hover, nav a.active { color:var(--geist-foreground); }
+    nav a.active { border-bottom:2px solid var(--geist-foreground); }
+    .card { background:var(--geist-background); border:1px solid var(--accents-2); border-radius:var(--geist-radius); padding:1.25rem; margin-bottom:1rem; }
+    .card:hover { border-color:var(--accents-3); }
+    .hash { font-family:var(--font-mono); font-size:0.8rem; color:var(--geist-success); background:#f0f5ff; padding:0.15rem 0.4rem; border-radius:3px; }
+    .summary-line { font-size:1rem; margin:0.5rem 0; }
+    .meta { font-size:0.8rem; color:var(--accents-5); }
+    .btn { display:inline-block; padding:0.4rem 1rem; background:var(--geist-foreground); color:var(--geist-background); border:none; border-radius:var(--geist-radius); font-size:0.85rem; cursor:pointer; text-decoration:none; }
+    .btn:hover { background:var(--accents-8); }
+    .btn-secondary { background:var(--accents-1); color:var(--geist-foreground); border:1px solid var(--accents-2); }
+    .btn-secondary:hover { background:var(--accents-2); }
+    .search-bar { display:flex; gap:0.5rem; margin-bottom:1.5rem; }
+    .search-bar input { flex:1; padding:0.5rem 0.75rem; border:1px solid var(--accents-2); border-radius:var(--geist-radius); font-size:0.9rem; outline:none; }
+    .search-bar input:focus { border-color:var(--geist-success); }
+    .pagination { display:flex; gap:0.5rem; justify-content:center; margin-top:1.5rem; }
+    .risk-low { color:#007c40; } .risk-mid { color:#d4a111; } .risk-high { color:var(--geist-error); }
+    .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin-bottom:2rem; }
+    .stat-card { background:var(--accents-1); border:1px solid var(--accents-2); border-radius:var(--geist-radius); padding:1.25rem; text-align:center; }
+    .stat-value { font-size:2rem; font-weight:700; color:var(--geist-foreground); }
+    .stat-label { font-size:0.8rem; color:var(--accents-5); margin-top:0.25rem; }
+    .chart-container { margin:1.5rem 0; }
+    .scope-tag { display:inline-block; background:var(--accents-1); border:1px solid var(--accents-2); border-radius:3px; padding:0.15rem 0.5rem; font-size:0.75rem; font-family:var(--font-mono); margin:0.15rem; }
+    footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--accents-2); font-size:0.8rem; color:var(--accents-5); text-align:center; }
+    @media (max-width:640px) { body { padding:1rem; } }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="{{activeList}}">摘要列表</a>
+    <a href="/stats" class="{{activeStats}}">统计</a>
+  </nav>
+  <main>{{{content}}}</main>
+  <footer>DiffSense v1.0 &middot; AI-powered code change interpreter</footer>
+</body>
+</html>
