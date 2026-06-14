@@ -448,6 +448,59 @@
 
 ---
 
+## [2026-06-14] Phase 9: 基础设施 — T17–T19
+
+### 条目 #18 — Dockerfile + CI + README 并行完成
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `subagent-driven-development`
+- **执行结果**:
+
+| Task | 内容 | Subagent | Commit | 状态 |
+|------|------|----------|--------|------|
+| T17 | Dockerfile（Node 18 Alpine + git，多阶段构建） | general | `7912e8d` | DONE |
+| T18 | GitHub Actions CI（test + docker build） | general | `7609351` | DONE |
+| T19 | README.md（项目简介 + CLI 参考 + Docker + 环境变量） | general | `3452fd5` | DONE |
+
+- **并行优化**: 三 task 并行派发（无文件冲突）
+- **人工干预**: 无
+
+---
+
+## Phase 10: 实现完成 — 总结
+
+### 全量统计
+
+| 指标 | 数值 |
+|------|------|
+| **总 Task 数** | 21（V0 + T0–T19） |
+| **subagent 派发次数** | 17 |
+| **手动执行** | 4（V0 脚手架审查、T0 脚手架、CLI 集成、Web 集成） |
+| **并行派发轮次** | 5 |
+| **测试通过** | **83 tests，18 files，0 failures** |
+| **Commit 数** | 26（worktree 内） |
+| **分支** | feat/core-engine |
+| **Worktree** | .worktrees/core-engine |
+
+### Superpowers 技能使用统计
+
+| 技能 | 使用次数 |
+|------|---------|
+| `brainstorming` | 1 |
+| `writing-plans` | 1 + 1 修订 |
+| `using-git-worktrees` | 1 |
+| `subagent-driven-development` | 1（17 次派发） |
+| `test-driven-development` | 17（每次 subagent 自动触发） |
+| `web-design-guidelines` (Open Design) | 1 |
+| `requesting-code-review` | 0（待执行——两阶段评审） |
+| `finishing-a-development-branch` | 0（待执行） |
+
+### 下一步
+
+按 Superpowers 流程，进入 **Phase 11: 完成开发分支**。触发 `finishing-a-development-branch` 技能，运行全量测试 → 合并选项 → merge 回 master。
+
+---
+
 ## [2026-06-14] Phase 8: T9-T14 CLI 层实现审查
 
 ### 条目 #15 — 人工审查：CLI 源码 vs PLAN.md 对照
