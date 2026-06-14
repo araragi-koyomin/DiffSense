@@ -1,15 +1,14 @@
 import express from 'express';
 import * as fs from 'fs'; import * as path from 'path';
+import { registerPageRoutes } from './routes/pages';
+import { registerApiRoutes } from './routes/api';
 
 export async function startWebServer(port: number): Promise<void> {
   const app = express();
   app.use(express.json());
-  const layoutPath = path.join(__dirname, 'views', 'layout.html');
-  const layout = fs.readFileSync(layoutPath, 'utf-8');
 
-  app.get('/', (_req, res) => {
-    res.send(layout.replace('{{{content}}}', '<p style="text-align:center;padding:2rem;color:var(--accents-5);">DiffSense Web 界面</p>'));
-  });
+  registerApiRoutes(app);
+  registerPageRoutes(app);
 
   let cp = port;
   for (let i = 0; i < 3; i++) {
