@@ -214,3 +214,65 @@
   - Aider 在 PLAN 依赖图标注清晰的情况下能正确识别 T0→T1 依赖关系，说明依赖图本身质量可靠
   - 冷启动验证中"task 的前置条件描述"比日常开发场景更重要——日常开发中 agent 有项目上下文自然知道脚手架已存在，但冷启动 agent 只能靠文档
   - SPEC_PROCESS.md 的 §1-§3（brainstorming 回顾）建议在冷启动验证完成后再补写，此时对 spec 质量已有客观反馈
+
+---
+
+## [2026-06-14] Phase 3b: 冷启动验证 V0 完成
+
+### 条目 #8 — Aider T1 实现完成，验证通过
+
+- **时间**: 2026-06-14
+- **触发的 Superpowers 技能**: 无（人工操作 Aider）
+
+- **Aider 执行过程关键节点**:
+  1. 初始提问：T0 脚手架缺失 → 指示创建最小脚手架
+  2. 首次 `npx vitest run` → "No test files found" — 代码展示但未写入磁盘
+  3. 明确指令"写入磁盘" → 成功写入 4 个文件
+  4. 再次运行 → **3 tests passed**
+
+- **Aider 产出**（临时文件，最终不保留）:
+  ```
+  tsconfig.json        — 逐字匹配 PLAN.md T0 Step 2
+  vitest.config.ts     — 逐字匹配 PLAN.md T0 Step 3
+  src/core/types.ts    — 8 个 interface，功能等价于 PLAN.md T1 Step 3
+  tests/core/types.test.ts — 3 个测试，断言匹配 PLAN.md T1 Step 1
+  ```
+
+- **验证结论**:
+  - SPEC 清晰度: 9/10 — Aider 无类型语义相关提问
+  - PLAN 可执行性: 8/10 — 唯一阻塞点为 T0 前置条件（已在 PLAN.md 中补充）
+  - 验证通过，SPEC.md + PLAN.md 质量达标
+
+- **人工干预**:
+  - 指示 Aider 创建最小脚手架（tsconfig + vitest + npm install）
+  - 指示 Aider 将文件写入磁盘（首次运行时工具调用未触发写入）
+  - 将发现写入 SPEC_PROCESS.md §4
+
+- **修订记录**:
+  - PLAN.md: T1 补充前置条件说明
+  - SPEC_PROCESS.md: 完整 §4 冷启动验证记录（3 个问题 + 验证结论）
+
+- **学到的教训**:
+  - 不同 agent 的工具调用行为差异显著：OpenCode 自动写文件，Aider 需显式指令
+  - 冷启动验证的价值不仅是发现 spec 缺陷，也是评估不同 agent 对同一份 PLAN 的理解一致性
+  - T1 级 task 粒度（仅类型定义）非常适合冷启动验证——复杂度足够暴露问题，但不会因太长而跑偏
+
+---
+
+## [2026-06-14] Phase 3c: SPEC_PROCESS.md 补全
+
+### 条目 #9 — 补全 brainstorming 回顾与反思
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: 无（人工撰写）
+- **内容**: 基于 AGENT_LOG.md 中条目 #1–#3 的记录，补全 SPEC_PROCESS.md 的四个待补充章节
+- **补全内容**:
+  - §1 Brainstorming 关键节点：3 个子节（Q12 Open Design 约束注入、Q4 已有偏好表达、Q1-Q2 场景聚焦）
+  - §2 至少 3 轮关键迭代：迭代 1（Q1-Q3 目标场景聚焦）、迭代 2（Q6-Q13 技术栈连锁决策）、迭代 3（Q12 上下文注入→方案重新对齐）
+  - §3 AI 建议采纳与推翻记录：11 条采纳 + 3 条推翻修正
+  - §5 反思：4 个优点 + 3 个不足 + 4 项"如果重做会改变的做法"
+- **人工干预**: 全部内容由我（学生）撰写，基于 brainstorming 实际对话的真实体验
+- **学到的教训**:
+  - SPEC_PROCESS.md 应在 brainstorming 结束后立即补充，而非等到冷启动验证完成之后——时间间隔导致细节需要通过 AGENT_LOG.md 简表反推
+  - 反思章节（§5）是最有价值的部分，因为它迫使我抽象思考"这个过程为什么有效/无效"，而不仅仅记录"做了什么"
+  - brainstorming 的"逐模块签字确认"机制在实施层面有效，但在设计层面缺少"外部约束感知"——Open Design 约束是用户手动注入的而非智能体主动发现的
