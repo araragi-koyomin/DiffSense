@@ -45,8 +45,9 @@ export function uninitHook(repoPath: string): HookResult {
 export function registerInitCommand(p: Command): void {
   p.command('init')
     .description('在当前 Git 仓库中安装 post-commit hook')
-    .action(() => {
-      const r = initHook(process.cwd());
+    .option('-r, --repo <path>', '仓库路径', process.cwd())
+    .action((opts) => {
+      const r = initHook(opts.repo);
       if (r.success) {
         console.log('DiffSense hook 已安装');
         if (r.backedUp) console.log('原有 hook 已备份为 post-commit.bak');

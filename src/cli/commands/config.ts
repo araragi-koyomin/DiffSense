@@ -8,7 +8,10 @@ function ask(q: string, d: string): Promise<string> {
 }
 
 export function registerConfigCommand(program: Command): void {
-  program.command('config').description('交互式配置 LLM provider').action(async () => {
+  program.command('config')
+    .description('交互式配置 LLM provider')
+    .option('-r, --repo <path>', '仓库路径', process.cwd())
+    .action(async (opts) => {
     const existing = loadConfig();
     console.log(`当前配置: provider=${existing.provider} base_url=${existing.base_url} model=${existing.model}`);
     const prov = await ask('provider（deepseek/glm）', existing.provider);
@@ -23,6 +26,7 @@ export function registerConfigCommand(program: Command): void {
     const cfg = { provider, base_url, model, token_limit: parseInt(tl) || 8000, web_port: parseInt(wp) || 3000 };
     saveConfig(cfg);
     console.log(`\n配置已保存到: ${getDefaultConfigPath()}`);
-    console.log(`注意: API Key 请通过环境变量设置: export ${provider === 'deepseek' ? 'DEEPSEEK_API_KEY' : 'GLM_API_KEY'}="your-key"`);
+    const keyVar = provider === 'deepseek' ? 'DEEPSEEK_API_KEY' : 'GLM_API_KEY';
+    console.log(`注意: API Key 请通过环境变量设置: PowerShell: ` + '$env:' + `${keyVar}="your-key"` + `  |  Linux/macOS: export ${keyVar}="your-key"`);
   });
 }

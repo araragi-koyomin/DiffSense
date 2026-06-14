@@ -8,15 +8,15 @@ AI 驱动的 git commit 语义摘要工具。让 `git diff` 不仅能告诉你**
 # 1. 拉取镜像
 docker pull ghcr.io/araragi-koyomin/diffsense:latest
 
-# 2. 配置 API Key（PowerShell）
+# 2. 配置 API Key
+#    PowerShell:
 $env:DEEPSEEK_API_KEY = "sk-xxx"
-
-# 2. 配置 API Key（Linux / macOS / Git Bash）
+#    Linux / macOS / Git Bash:
 export DEEPSEEK_API_KEY="sk-xxx"
 
-# 3. 初始化（在你的 git 仓库目录下）
+# 3. 初始化 + 配置（在你的 git 仓库目录下）
 docker-compose run --rm diffsense init -r /repo
-docker-compose run --rm diffsense config -r /repo
+docker-compose run --rm diffsense config
 ```
 
 ## 使用方式

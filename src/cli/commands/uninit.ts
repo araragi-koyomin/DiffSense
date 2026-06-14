@@ -4,8 +4,9 @@ import { uninitHook } from './init';
 export function registerUninitCommand(p: Command): void {
   p.command('uninit')
     .description('卸载 post-commit hook')
-    .action(() => {
-      const r = uninitHook(process.cwd());
+    .option('-r, --repo <path>', '仓库路径', process.cwd())
+    .action((opts) => {
+      const r = uninitHook(opts.repo);
       if (r.success) {
         console.log('DiffSense hook 已卸载');
       } else {
