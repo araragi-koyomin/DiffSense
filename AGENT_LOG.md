@@ -407,8 +407,44 @@
 - **人工干预**: T9–T14 完成后手动取消 CLI 入口中的命令注册注释，修复 2 个 TS 编译错误
 - **学到的教训**:
   - CLI 入口作为共享文件（所有命令注册在此），subagent 并行执行时采用"占位注释"策略避免冲突——每个 subagent 只创建自己的命令文件，集成由主 agent 统一完成
-  - `registerWebCommand` 使用动态 import（`await import('../../web/index')`）可避免编译期依赖 web 模块，web 不存在时仅运行时失败
+  - `registerWebCommand` 使用动态 import（`await import('../../web/index')`）可避免编译期依赖 web 模块
   - sql.js 缺少官方类型声明文件是已知问题，需手动编写 `.d.ts`
+
+---
+
+## [2026-06-14] Phase 8: Subagent-Driven 实现 — Web 层 (T15–T16d)
+
+### 条目 #16 — T15–T16d Web 层实现完成
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `subagent-driven-development`、`test-driven-development`、`web-design-guidelines`（Open Design）
+- **Open Design**: 使用 Vercel Geist 设计系统 tokens（`--geist-foreground` / `--geist-background` / `--accents-1~8` / `--geist-error` / `--geist-success` / `--geist-radius`）
+- **执行结果**:
+
+| Task | 内容 | Subagent | Commit | 状态 |
+|------|------|----------|--------|------|
+| T15 | Web 服务器 + Vercel Geist 布局（layout.html 含完整 CSS） | general | `9c611a5` | DONE |
+| T16a | 列表页路由 + 全部页面路由（pages.ts 含三页面 + 模板函数） | general | `2ae177f` | DONE |
+| T16b | 详情页视图（detail.html） | general | `298152b` | DONE |
+| T16c | 统计页视图（stats.html + SVG 图表） | general | `7512cd7` | DONE |
+| T16d | JSON API 路由（3 个端点） | general | `d575a64` | DONE |
+| — | Web 路由集成（index.ts 接入 pages + API） | 手动 | `714cdb8` | DONE |
+
+- **测试结果**: **83 tests PASS，18 test files，0 failures**（+18 tests 来自 Web 层）
+- **tsc 编译**: 通过（零类型错误）
+- **并行优化**: T16a/T16b/T16c 并行派发
+- **文件冲突规避**: T16a 统一创建 pages.ts（含全部三页面路由），T16b/T16c 只创建各自视图和测试，避免 pages.ts 合并冲突
+- **人工干预**: T15-T16d 完成后手动更新 index.ts 集成 `registerPageRoutes` + `registerApiRoutes`
+- **学到的教训**:
+  - 同一文件被多个 subagent 修改是并行派发的主要风险——"主路由文件由单个 subagent 统一创建"的策略有效避免了合并冲突
+  - Vercel Geist 设计系统在 CSS 层面的落地比预期简单——只需 30 个 CSS 变量和一个 layout.html 就能定义全套视觉语言
+  - Web 层测试以数据层集成测试为主（验证存储查询），未做 HTTP 端到端测试（后续可用 supertest 补充）
+
+### 条目 #17 — 全量测试汇总（T0–T16d）
+
+- **总计**: 83 tests PASS，18 test files，0 failures
+- **按模块分布**: core 43 + CLI 22 + Web 18
+- **tsc 编译**: 通过
 
 ---
 
