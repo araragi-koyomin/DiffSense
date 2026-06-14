@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   diffsense:
     image: ghcr.io/araragi-koyomin/diffsense:latest
