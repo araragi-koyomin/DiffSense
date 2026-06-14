@@ -62,6 +62,17 @@
     .gh-link { font-size:0.8rem; color:var(--accents-5); text-decoration:none; margin-left:0.25rem; }
     .gh-link:hover { color:var(--geist-foreground); }
     .card-top { display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap; margin-bottom:0.3rem; }
+    .branch-bar { display:flex; gap:0.35rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .branch-btn { display:inline-block; padding:0.2rem 0.6rem; font-size:0.75rem; border:1px solid var(--accents-2); border-radius:var(--geist-radius); text-decoration:none; color:var(--accents-5); cursor:pointer; }
+    .branch-btn:hover { border-color:var(--geist-foreground); color:var(--geist-foreground); }
+    .branch-btn.active { border-color:var(--geist-foreground); color:var(--geist-foreground); background:var(--accents-1); }
+    .top-actions { display:flex; justify-content:flex-end; margin-bottom:1rem; }
+    .card-analyzed { border-left:3px solid var(--accents-3); }
+    .card-unanalyzed { opacity:0.75; }
+    .card-unanalyzed:hover { opacity:1; }
+    .status-badge { display:inline-block; padding:0.1rem 0.4rem; border-radius:3px; font-size:0.65rem; vertical-align:middle; }
+    .status-badge.analyzed { background:#e6f4ea; color:#007c40; }
+    .status-badge.unanalyzed { background:var(--accents-1); color:var(--accents-5); }
     footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--accents-2); font-size:0.8rem; color:var(--accents-5); text-align:center; }
     @media (max-width:640px) { body { padding:1rem; } }
   </style>
