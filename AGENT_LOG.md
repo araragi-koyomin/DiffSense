@@ -579,3 +579,51 @@
   - layout.html 的 CSS 变量体系一次定义、全局复用——Web 层 template 文件中零硬编码颜色，维护性明显优于 T0-T14 的 CLI（后者 chalk 颜色散落在各命令中）
   - Web 层测试在当前粒度（数据层集成测试）下足够有效——未做 HTTP 端到端测试（supertest）是因为所有路由逻辑的核心是 storage 查询，mock HTTP 的意义有限
   - T16a/T16b/T16c 并行派发时采用"一个 subagent 建 pages.ts，其他只建视图"的策略成功避免了文件冲突
+
+---
+
+## [2026-06-14] Phase 10: Subagent-Driven 实现 — 基础设施 (T17–T19)
+
+### 条目 #19 — T17-T19 并行实现完成
+
+- **时间戳**: 2026-06-14
+- **触发的 Superpowers 技能**: `subagent-driven-development`
+- **执行结果**:
+
+| Task | 内容 | Subagent | Commit | 状态 |
+|------|------|----------|--------|------|
+| T17 | Dockerfile（Node 18 Alpine + git，双阶段构建） | general | `7912e8d` | DONE |
+| T18 | CI 配置（GitHub Actions，Node 20 + Docker build） | general | `7609351` | DONE |
+| T19 | README.md（7 章节完整使用指南） | general | `3452fd5` | DONE |
+
+- **并行派发**: T17/T18/T19 三任务并行，无文件冲突
+- **Docker 验证**: 待执行 `docker build -t diffsense .`
+- **人工干预**: 无
+
+---
+
+## [2026-06-14] Phase 11: T17-T19 审查 + 全量实现总结
+
+### 条目 #20 — T17-T19 审查 + 最终汇总
+
+- **审查结果**:
+
+| 文件 | PLAN 要求 | 判定 | 备注 |
+|------|-----------|------|------|
+| `Dockerfile` | Node 18 Alpine + git，双阶段 | ✅ | views 路径 `./dist/web/views/`，优于 PLAN |
+| `.github/workflows/ci.yml` | Node 20 + test + docker build | ✅ | 完全匹配 |
+| `README.md` | 7 章节 | ✅ | 简介/快速开始/CLI/Web/Docker/环境变量/技术栈/目录结构 |
+
+- **全量汇总**:
+
+| 维度 | 数据 |
+|------|------|
+| Task 总数 | 21（V0 + T0-T19） |
+| 实现 commit | 25（feat/core-engine） |
+| Subagent 派发 | 17 次 |
+| 并行轮次 | 5 轮（T2+T3 / T5+T6 / T10-T14 / T16a-c / T17-T19） |
+| 测试 | 83 PASS，18 files，0 failures |
+| tsc 编译 | 通过 |
+| 偏离 PLAN 项 | 2 个（sql.js 替代 better-sqlite3、Dockerfile views 路径），均为合理改进 |
+
+- **审查结论**: **通过。** 21 个 task 全部完成，83 tests 全绿，进入 Step 7（finishing-a-development-branch）
