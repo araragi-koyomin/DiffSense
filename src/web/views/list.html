@@ -3,6 +3,12 @@
     hx-get="/" hx-trigger="keyup changed delay:300ms" hx-target="body" />
 </div>
 
+<div class="branch-bar">{{{branchBar}}}</div>
+
+<div class="top-actions">
+  <button class="btn btn-secondary" onclick="analyzeAll()">分析全部未生成</button>
+</div>
+
 <div id="progress-bar" class="progress-bar" style="display:none;">
   <div class="progress-fill" id="progress-fill" style="width:0%"></div>
   <span id="progress-text" class="progress-text"></span>
@@ -11,7 +17,6 @@
 <div class="batch-bar" id="batch-bar" style="display:none;">
   <span id="batch-count">已选 0 项</span>
   <button class="btn" onclick="batchAnalyze()">分析选中</button>
-  <button class="btn btn-secondary" onclick="analyzeAll()">分析全部未生成</button>
 </div>
 
 <form id="commit-form">
