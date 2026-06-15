@@ -1,29 +1,58 @@
-<div class="card">
-  <h2 style="margin-bottom:0.5rem;"><span class="hash">{{fullHash}}</span></h2>
-  <div class="meta">{{author}} &middot; {{date}} &middot; {{model}}</div>
-  <p style="margin:0.75rem 0;color:var(--accents-5);"><strong>原始消息:</strong> {{message}}</p>
+<div class="detail-page">
+  <div class="detail-hero">
+    <div class="detail-hero-left">
+      <span class="hash-large">{{fullHash}}</span>
+      <div class="detail-meta-row">
+        <span class="meta-pill">{{author}}</span>
+        <span class="meta-divider">&middot;</span>
+        <span class="meta-pill">{{date}}</span>
+        <span class="meta-divider">&middot;</span>
+        <span class="meta-pill model-pill">{{model}}</span>
+        <span class="meta-pill token-pill">{{tokensUsed}} tokens</span>
+      </div>
+    </div>
+    <div class="detail-hero-right">
+      {{{ghLink}}}
+    </div>
+  </div>
+
   {{{truncatedWarning}}}
-  {{{ghLink}}}
-  <div style="margin:1.25rem 0;">
-    <h3 style="margin-bottom:0.25rem;">📝 摘要</h3>
-    <p>{{summary}}</p>
+
+  <div class="detail-grid">
+    <div class="detail-main">
+      <div class="detail-section">
+        <div class="section-label">摘要</div>
+        <div class="section-body summary-body">{{summary}}</div>
+      </div>
+
+      <div class="detail-section">
+        <div class="section-label">意图</div>
+        <div class="section-body">{{intent}}</div>
+      </div>
+
+      <div class="detail-section">
+        <div class="section-label">风险</div>
+        <div class="section-body"><span class="risk-badge {{riskClass}}">{{risk}}</span></div>
+      </div>
+    </div>
+
+    <div class="detail-side">
+      <div class="detail-section">
+        <div class="section-label">原始提交消息</div>
+        <div class="section-body msg-body">{{message}}</div>
+      </div>
+
+      <div class="detail-section">
+        <div class="section-label">影响范围</div>
+        <div class="section-body">{{{scopeTags}}}</div>
+      </div>
+    </div>
   </div>
-  <div style="margin:1.25rem 0;">
-    <h3 style="margin-bottom:0.25rem;">🎯 意图</h3>
-    <p>{{intent}}</p>
-  </div>
-  <div style="margin:1.25rem 0;">
-    <h3 style="margin-bottom:0.25rem;">📂 影响范围</h3>
-    <div style="margin-top:0.25rem;">{{{scopeTags}}}</div>
-  </div>
-  <div style="margin:1.25rem 0;">
-    <h3 style="margin-bottom:0.25rem;">⚠️ 风险</h3>
-    <p><span class="{{riskClass}}">{{risk}}</span></p>
-  </div>
-  <div style="margin:1.25rem 0;">
-    <h3 style="margin-bottom:0.25rem;">📋 文件变更</h3>
+
+  <div class="detail-section">
+    <div class="section-label">文件变更</div>
     <div class="file-change-list">{{{fileChanges}}}</div>
   </div>
-  <p style="margin-top:1rem;font-size:0.8rem;color:var(--accents-5);">Token 消耗: {{tokensUsed}}</p>
 </div>
-<p style="margin-top:1rem;"><a href="/" class="btn btn-secondary">&larr; 返回列表</a></p>
+
+<p style="margin-top:1.5rem;"><a href="/" class="btn btn-secondary">&larr; 返回列表</a></p>

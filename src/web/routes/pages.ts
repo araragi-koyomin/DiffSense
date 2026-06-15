@@ -325,7 +325,7 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
       })();
     } catch {}
 
-    const ghLink = githubUrl ? `<p style="margin:1rem 0;"><a class="btn btn-secondary" href="${githubUrl}/commit/${hash}" target="_blank">查看 GitHub commit &#8599;</a></p>` : '';
+    const ghLink = githubUrl ? `<a class="btn btn-secondary btn-gh" href="${githubUrl}/commit/${hash}" target="_blank">查看 GitHub &#8599;</a>` : '';
 
     closeDatabase(effectiveDb);
     res.send(render('detail', {
