@@ -1,6 +1,9 @@
 import { Express, Request, Response } from 'express';
 import * as fs from 'fs'; import * as path from 'path';
 import { initDatabase, getSummariesByRepo, getCommit, getSummaryByHash, getStats, closeDatabase } from '../../core/storage';
+import { createSession, getSession } from '../session';
+import { cloneRepo } from '../cloner';
+import * as cryptoKeys from '../crypto-keys';
 
 const VIEWS_DIR = path.join(__dirname, '..', 'views');
 
@@ -123,21 +126,42 @@ async function buildBranchBar(rp: string, activeBranch: string, searchVal: strin
   return html;
 }
 
+function renderLanding(error: string): string {
+  const layout = fs.readFileSync(path.join(VIEWS_DIR, 'layout.html'), 'utf-8');
+  let html = fs.readFileSync(path.join(VIEWS_DIR, 'landing.html'), 'utf-8');
+  html = html.replace('{{{error}}}', error ? `<p style="color:var(--geist-error);margin-bottom:1rem;">${escapeHtml(error)}</p>` : '');
+  return layout.replace('{{{content}}}', html);
+}
+
 export function registerPageRoutes(app: Express, repoPath?: string): void {
   const rp = repoPath || process.cwd();
   const dbPath = path.join(rp, '.diffsense.db');
 
-  // ========== GET / — 列表页（全部 commit + branch 筛选 + 搜索 + 分页） ==========
+  const sessionRepo = (req: import('express').Request): string | null => {
+    const token = req.cookies?.['ds_session'];
+    if (!token) return null;
+    const s = getSession(token);
+    return s ? s.repoPath : null;
+  };
+
+  // ========== GET / — 列表页或 landing ==========
   app.get('/', async (req: Request, res: Response) => {
+    const sr = sessionRepo(req);
+    if (!sr && !repoPath) {
+      res.send(renderLanding(''));
+      return;
+    }
+    const effectiveRp = sr || rp;
+    const effectiveDb = path.join(effectiveRp, '.diffsense.db');
+
     const search = (req.query.q as string) || '';
     const branch = (req.query.branch as string) || '__all__';
     const page = parseInt(req.query.page as string) || 1;
     const limit = 20;
 
-    const branchBar = await buildBranchBar(rp, branch, search);
-    const commits = await getAllCommitsWithStatus(rp, dbPath, branch);
+    const branchBar = await buildBranchBar(effectiveRp, branch, search);
+    const commits = await getAllCommitsWithStatus(effectiveRp, effectiveDb, branch);
 
-    // search filter
     let filtered = commits;
     if (search) {
       const q = search.toLowerCase();
@@ -147,7 +171,6 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
       );
     }
 
-    // pagination
     const total = filtered.length;
     const offset = (page - 1) * limit;
     const paged = filtered.slice(offset, offset + limit);
@@ -160,7 +183,7 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
       return;
     }
 
-    const { githubUrl } = await getRepoMeta(rp);
+    const { githubUrl } = await getRepoMeta(effectiveRp);
 
     let rows = '';
     for (const c of paged) {
@@ -171,7 +194,6 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
       const branchBadge = c.branch ? `<span class="branch-badge" style="border-color:${bc};color:${bc};">${escapeHtml(c.branch)}</span>` : '';
 
       if (c.hasSummary && c.summary) {
-        // analyzed card
         let riskClass = 'risk-low';
         if (c.risk && c.risk.includes('高')) riskClass = 'risk-high';
         else if (c.risk && c.risk.includes('中')) riskClass = 'risk-mid';
@@ -182,7 +204,6 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
 
         rows += `<div class="card card-analyzed" style="border-left:3px solid ${bc};"><div class="card-body"><div class="card-top"><span class="hash">${hash7}</span> ${branchBadge} <span style="margin-left:0.25rem;font-size:0.7rem;color:var(--accents-5);">${c.model||'N/A'}</span> ${ghLink} <span class="status-badge analyzed">已分析</span></div><div class="summary-line"><a href="/commits/${c.hash}" style="color:inherit;text-decoration:none;">${escapeHtml(c.summary)}</a></div><div class="meta">${date} &middot; ${author}${c.risk?' &middot; <span class="'+riskClass+'">'+escapeHtml(c.risk)+'</span>':''}</div>${scopeTags ? '<div style="margin-top:0.4rem;">'+scopeTags+scopeMore+'</div>' : ''}</div></div>`;
       } else {
-        // unanalyzed card — has checkbox
         rows += `<div class="card card-unanalyzed" style="border-left:3px solid ${bc};opacity:0.75;"><label class="card-check"><input type="checkbox" class="commit-checkbox" value="${c.hash}" onchange="toggleSelect('${c.hash}', this)" /></label><div class="card-body"><div class="card-top"><span class="hash">${hash7}</span> ${branchBadge} <span class="status-badge unanalyzed">未分析</span></div><div class="summary-line" style="color:var(--accents-5);">${escapeHtml(c.message)}</div><div class="meta">${date} &middot; ${author}</div></div></div>`;
       }
     }
@@ -196,6 +217,43 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
       activeList: 'active', activeStats: '', rows, pagination,
       searchVal: escapeHtml(search), branchBar, githubUrl, progressBar: '',
     }));
+  });
+
+  // ========== POST /add-repo — 添加新仓库 ==========
+  app.post('/add-repo', async (req: Request, res: Response) => {
+    const { url, apiKey } = req.body as { url: string; apiKey: string };
+    if (!url || !apiKey) {
+      res.send(renderLanding('请填写仓库 URL 和 API Key'));
+      return;
+    }
+    const m = url.match(/github\.com[:/]([^/]+)\/([^/\s.]+?)(?:\.git)?$/);
+    if (!m) {
+      res.send(renderLanding('无效的 GitHub 仓库 URL'));
+      return;
+    }
+
+    let session;
+    try { session = createSession(url); } catch (e: any) {
+      res.send(renderLanding(e.message));
+      return;
+    }
+
+    const result = await cloneRepo(url, session.repoPath);
+    if (!result.success) {
+      res.send(renderLanding(result.error || 'clone 失败'));
+      return;
+    }
+
+    const encrypted = cryptoKeys.encryptApiKey(apiKey);
+    const keyFile = path.join(session.repoPath, '.apikey');
+    fs.writeFileSync(keyFile, encrypted, 'utf-8');
+
+    res.cookie('ds_session', session.token, {
+      httpOnly: true,
+      maxAge: 30 * 60 * 1000,
+      path: '/',
+    });
+    res.redirect('/');
   });
 
   // ========== GET /commits/:hash — 详情页（含 diff 和 GitHub 链接） ==========
