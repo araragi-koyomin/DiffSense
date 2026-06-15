@@ -748,3 +748,35 @@
   - 并行派发 T24+T25 节省时间，serial 派发 T21→T22→T23→T20 确保 pages.ts 和 layout.html 不冲突
   - Subagent 在 6 个 task 中全部主动报告 DONE，无 BLOCKED — PLAN.md task 粒度有效
   - 两阶段评审在 T24 捕获 `version: '3.8'` 多余字段
+
+---
+
+## [2026-06-15] Phase 15: 多仓库 SaaS Web 模式
+
+### 条目 #30 — Brainstorming（SaaS 需求）
+
+- **时间戳**: 2026-06-15
+- **触发的 Superpowers 技能**: `brainstorming`
+- **触发背景**: 用户尝试部署到华为云 ECS，发现当前架构仅支持单仓库绑定
+- **8 轮决策**: 用户模型(无账号) → 仓库生命周期(30min 会话级) → API Key(服务端加密) → 首页(单页输入框) → 数据隔离(独立 DB) → 会话机制(Cookie) → Clone 失败(即时提示) → 添加后行为(手动勾选)
+- **人工干预**: 用户推翻了 AI 提出的"轻量用户模型"和"浏览器存储 Key"方案，明确要零门槛 + 服务端加密
+- **学到的教训**: SaaS 改造的核心不是"加个输入框"，而是整个数据隔离模型的重设计
+
+### 条目 #31 — writing-plans + 实现
+
+- **时间戳**: 2026-06-15
+- **触发的 Superpowers 技能**: `writing-plans` → `using-git-worktrees` → `subagent-driven-development`
+- **Task 规划**: T30-T35 共 6 个 task
+- **并行执行**: T30+T31+T32 三个独立新文件并行下发 subagent，T33+T34+T35 串行
+- **关键实现**:
+  - T30: Session 管理（内存 Map + 30min TTL + 5min 定时清理）
+  - T31: API Key AES-256-GCM 加密（密钥从 `DIFFSENSE_SECRET` 环境变量注入）
+  - T32: Git clone 服务端模块（depth=50, timeout=30s）
+  - T33: Landing page + cookie-parser + POST /add-repo 集成
+  - T34: 所有现有路由和 API 适配 session repo 路径
+  - T35: docker-compose 简化（移除 volume mount, 去掉 `-r /repo`）
+- **全量**: 6 tasks / 5 subagents / 95 tests / 8 commits
+- **PR**: https://github.com/araragi-koyomin/DiffSense/pull/3（已合并）
+- **学到的教训**:
+  - T30-T32 三个新文件并行下发节省约 50% 时间
+  - master 分支 merge 后忘记 `npm install`，cookie-parser 缺失导致 1 test fail — PR merge 后应检查新依赖
