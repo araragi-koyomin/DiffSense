@@ -259,11 +259,14 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
   // ========== GET /commits/:hash — 详情页（含 diff 和 GitHub 链接） ==========
   app.get('/commits/:hash', async (req: Request, res: Response) => {
     const hash = req.params.hash;
-    if (!fs.existsSync(dbPath)) { res.status(404).send('数据库未找到'); return; }
-    await initDatabase(dbPath);
-    const summary = getSummaryByHash(dbPath, rp, hash);
-    if (!summary) { res.status(404).send('未找到 commit ' + hash); closeDatabase(dbPath); return; }
-    const commit = getCommit(dbPath, rp, hash);
+    const sr = sessionRepo(req);
+    const effectiveRp = sr || rp;
+    const effectiveDb = path.join(effectiveRp, '.diffsense.db');
+    if (!fs.existsSync(effectiveDb)) { res.status(404).send('数据库未找到'); return; }
+    await initDatabase(effectiveDb);
+    const summary = getSummaryByHash(effectiveDb, effectiveRp, hash);
+    if (!summary) { res.status(404).send('未找到 commit ' + hash); closeDatabase(effectiveDb); return; }
+    const commit = getCommit(effectiveDb, effectiveRp, hash);
     const scope = JSON.parse(summary.scope || '[]') as string[];
     const scopeTags = scope.map((f: string) => `<span class="scope-tag">${escapeHtml(f)}</span>`).join('');
     let riskClass = 'risk-low';
@@ -276,7 +279,7 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
     let fileChanges: FileChange[] = [];
     try {
       const sg = (await import('simple-git')).default;
-      const git = sg(rp);
+      const git = sg(effectiveRp);
       let nameStatusOut = '';
       let numstatOut = '';
       try {
@@ -316,7 +319,7 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
     try {
       githubUrl = await (async () => {
         const sg = (await import('simple-git')).default;
-        const remotes = await sg(rp).raw(['remote', 'get-url', 'origin']);
+        const remotes = await sg(effectiveRp).raw(['remote', 'get-url', 'origin']);
         const m = (remotes || '').trim().match(/github\.com[:/](.+?)(?:\.git)?$/);
         return m ? `https://github.com/${m[1]}` : '';
       })();
@@ -324,7 +327,7 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
 
     const ghLink = githubUrl ? `<p style="margin:1rem 0;"><a class="btn btn-secondary" href="${githubUrl}/commit/${hash}" target="_blank">查看 GitHub commit &#8599;</a></p>` : '';
 
-    closeDatabase(dbPath);
+    closeDatabase(effectiveDb);
     res.send(render('detail', {
       activeList: '', activeStats: '', hash: summary.commit_hash.substring(0, 7), fullHash: summary.commit_hash,
       author: escapeHtml(commit?.author || 'N/A'), date: (commit?.date || '').substring(0, 10), message: escapeHtml(commit?.message || 'N/A'),
@@ -338,12 +341,15 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
 
   // ========== GET /stats — 统计页 ==========
   app.get('/stats', async (req: Request, res: Response) => {
-    if (!fs.existsSync(dbPath)) {
+    const sr = sessionRepo(req);
+    const effectiveRp = sr || rp;
+    const effectiveDb = path.join(effectiveRp, '.diffsense.db');
+    if (!fs.existsSync(effectiveDb)) {
       res.send(render('stats', { activeList: '', activeStats: 'active', totalCommits: '0', totalTokens: '0', modelDist: '<p style="color:var(--accents-5);">暂无数据</p>', monthChart: '<p style="color:var(--accents-5);">暂无月度数据</p>' }));
       return;
     }
-    await initDatabase(dbPath);
-    const stats = getStats(dbPath, rp);
+    await initDatabase(effectiveDb);
+    const stats = getStats(effectiveDb, effectiveRp);
     const modelDist = Object.entries(stats.modelDistribution)
       .map(([m, c]) => `<div class="stat-card"><div class="stat-value">${c}</div><div class="stat-label">${m}</div></div>`)
       .join('') || '<p style="color:var(--accents-5);">暂无数据</p>';
@@ -358,7 +364,7 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
       ? `<div class="chart-container"><svg viewBox="0 0 660 200" width="100%" height="200">${bars}<line x1="10" y1="170" x2="650" y2="170" stroke="var(--accents-3)" stroke-width="1"/></svg></div>`
       : '<p style="text-align:center;color:var(--accents-5);">暂无月度数据</p>';
 
-    closeDatabase(dbPath);
+    closeDatabase(effectiveDb);
     res.send(render('stats', { activeList: '', activeStats: 'active', totalCommits: String(stats.totalCommits), totalTokens: String(stats.totalTokensUsed), modelDist, monthChart }));
   });
 }
