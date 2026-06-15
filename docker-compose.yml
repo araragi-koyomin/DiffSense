@@ -5,8 +5,6 @@ services:
     container_name: diffsense
     ports:
       - '9090:3000'
-    volumes:
-      - .:/repo
     environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-    command: web -r /repo
+      - DIFFSENSE_SECRET=${DIFFSENSE_SECRET:-}
+    command: web
