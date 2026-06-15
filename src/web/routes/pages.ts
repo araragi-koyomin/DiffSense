@@ -209,8 +209,16 @@ export function registerPageRoutes(app: Express, repoPath?: string): void {
     }
 
     const hasMore = offset + limit < total;
-    const pagination = hasMore
-      ? `<div class="pagination"><a class="btn btn-secondary" href="/?branch=${encodeURIComponent(branch)}&q=${encodeURIComponent(search)}&page=${page + 1}">加载更多（${total - offset - limit} 条剩余）</a></div>`
+    const paginationParts: string[] = [];
+    if (page > 1) {
+      paginationParts.push(`<a class="btn btn-secondary" href="/?branch=${encodeURIComponent(branch)}&q=${encodeURIComponent(search)}&page=${page - 1}">&larr; 上一页</a>`);
+    }
+    paginationParts.push(`<span class="page-indicator">第 ${page} 页 / 共 ${Math.ceil(total / limit)} 页</span>`);
+    if (hasMore) {
+      paginationParts.push(`<a class="btn btn-secondary" href="/?branch=${encodeURIComponent(branch)}&q=${encodeURIComponent(search)}&page=${page + 1}">下一页 &rarr;</a>`);
+    }
+    const pagination = total > limit
+      ? `<div class="pagination">${paginationParts.join('')}</div>`
       : '';
 
     res.send(render('list', {
