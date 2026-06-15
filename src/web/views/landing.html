@@ -1,0 +1,21 @@
+<div style="max-width:480px;margin:4rem auto;">
+  <h2 style="margin-bottom:0.5rem;">DiffSense</h2>
+  <p style="color:var(--accents-5);margin-bottom:2rem;">输入 GitHub 公开仓库链接，AI 自动分析 commit 语义</p>
+
+  <form method="POST" action="/add-repo" style="display:flex;flex-direction:column;gap:1rem;">
+    <div>
+      <label style="font-size:0.85rem;color:var(--accents-5);display:block;margin-bottom:0.3rem;">GitHub 仓库 URL</label>
+      <input type="text" name="url" placeholder="https://github.com/owner/repo"
+        style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--accents-2);border-radius:var(--geist-radius);font-size:0.9rem;"
+        required />
+    </div>
+    <div>
+      <label style="font-size:0.85rem;color:var(--accents-5);display:block;margin-bottom:0.3rem;">API Key（DeepSeek 或 GLM）</label>
+      <input type="password" name="apiKey" placeholder="sk-..."
+        style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--accents-2);border-radius:var(--geist-radius);font-size:0.9rem;"
+        required />
+    </div>
+    {{{error}}}
+    <button type="submit" class="btn" style="padding:0.7rem;">开始分析</button>
+  </form>
+</div>

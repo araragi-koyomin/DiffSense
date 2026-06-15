@@ -1,54 +1,50 @@
 # DiffSense — 代码变更语义解释器
 
-AI 驱动的 git commit 语义摘要工具。让 `git diff` 不仅能告诉你**改了什么**，还能告诉你**为什么改**。
+AI 驱动的 git commit 语义摘要工具。打开浏览器，输入 GitHub 仓库链接，AI 自动分析 commit 语义。
 
 ## 快速开始（Docker + docker-compose）
 
 ```bash
-# 1. 获取镜像（二选一）
-#    A. 从源码构建（推荐，确保最新）:
+# 1. 构建并启动
 docker-compose build
-#    B. 从 GHCR 拉取:
-docker pull ghcr.io/araragi-koyomin/diffsense:latest
+docker-compose up
 
-# 2. 配置 API Key
-#    PowerShell:
-$env:DEEPSEEK_API_KEY = "sk-xxx"
-#    Linux / macOS / Git Bash:
-export DEEPSEEK_API_KEY="sk-xxx"
-
-# 3. 初始化 + 配置（在你的 git 仓库目录下）
-docker-compose run --rm diffsense init -r /repo
-docker-compose run --rm diffsense config
+# 2. 打开浏览器
+# 访问 http://localhost:9090
+# 输入 GitHub 公开仓库 URL + API Key 即可开始分析
 ```
+> **PowerShell 用户：** 设置环境变量用 `$env:DIFFSENSE_SECRET = "your-secret"` 替代 `export`
 
 ## 使用方式
 
-### Web 界面（推荐）
+打开 `http://localhost:9090`，你会看到：
+
+1. **输入 GitHub 仓库 URL**（如 `https://github.com/facebook/react`）
+2. **输入 LLM API Key**（DeepSeek 或 智谱 GLM）
+3. 系统自动 clone 仓库并进入 commit 列表
+4. 勾选想分析的 commit，点击"分析选中"
+5. 查看结构化摘要（摘要 / 意图 / 影响范围 / 风险 / 文件变更列表）
+
+会话 30 分钟无操作自动清理。
+
+## 部署到云服务器
 
 ```bash
-docker-compose up
-# 访问 http://localhost:9090
-# 停止: Ctrl+C
+# SSH 登录服务器后
+docker pull ghcr.io/araragi-koyomin/diffsense:latest
+docker run -d --name diffsense \
+  -p 9090:3000 \
+  -e DIFFSENSE_SECRET="your-random-secret-32-chars" \
+  --restart always \
+  ghcr.io/araragi-koyomin/diffsense:latest web
+
+# 在云控制台安全组开放 TCP 9090 端口
+# 访问 http://你的公网IP:9090
 ```
 
-### CLI 命令
+> `DIFFSENSE_SECRET` 用于加密用户 API Key。不设置则每次重启后已保存的 Key 失效（需重新输入）。
 
-```bash
-# 查看摘要列表
-docker-compose run --rm diffsense log -r /repo
-
-# 查看某次 commit 的详细摘要
-docker-compose run --rm diffsense explain HEAD -r /repo
-
-# 强制生成摘要（覆盖缓存）
-docker-compose run --rm diffsense generate HEAD -r /repo
-
-# 卸载 hook
-docker-compose run --rm diffsense uninit -r /repo
-```
-
-## 从源码安装
+## 从源码安装（CLI 模式）
 
 ```bash
 git clone https://github.com/araragi-koyomin/DiffSense.git
@@ -57,7 +53,7 @@ npm install && npm run build
 npm link                # 注册全局命令 ds
 ```
 
-## CLI 命令
+### CLI 命令
 
 | 命令 | 说明 |
 |------|------|
@@ -69,21 +65,13 @@ npm link                # 注册全局命令 ds
 | `ds generate <ref>` | 强制为指定 commit 生成摘要 |
 | `ds web` | 启动本地 Web 界面 |
 
-## Web 界面 (http://localhost:9090)
-
-三个页面：
-- **摘要列表** — 展示仓库全部 commit，按 branch 筛选，勾选未分析的 commit 批量分析
-- **详情页** — 完整结构化卡片（摘要 / 意图 / 影响范围 / 风险 / 文件变更列表）
-- **统计面板** — 月度趋势图、模型使用分布、Token 消耗统计
-
 ## 环境变量
 
 | 变量 | 说明 |
 |------|------|
-| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 |
-| `GLM_API_KEY` | 智谱 GLM API 密钥 |
-| `DEEPSEEK_BASE_URL` | DeepSeek API 地址（可选） |
-| `GLM_BASE_URL` | GLM API 地址（可选） |
+| `DIFFSENSE_SECRET` | 加密 API Key 的密钥（可选，建议设置） |
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥（CLI 模式用） |
+| `GLM_API_KEY` | 智谱 GLM API 密钥（CLI 模式用） |
 
 ## 技术栈
 
@@ -100,7 +88,7 @@ npm link                # 注册全局命令 ds
 src/
 ├── cli/          # CLI 入口 + 命令
 ├── core/         # 核心引擎（diff 解析 / LLM / 存储）
-├── web/          # Web 服务 + 路由 + 视图
+├── web/          # Web 服务 + 路由 + 视图 + session
 └── types.ts
 tests/
 ├── core/         # 引擎单元测试

@@ -1,11 +1,19 @@
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import * as fs from 'fs'; import * as path from 'path';
 import { registerPageRoutes } from './routes/pages';
 import { registerApiRoutes } from './routes/api';
+import { initCrypto } from './crypto-keys';
+import { startCleanupTimer } from './session';
 
 export async function startWebServer(port: number, repoPath?: string): Promise<void> {
+  initCrypto(process.env['DIFFSENSE_SECRET']);
+  startCleanupTimer();
+
   const app = express();
   app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+  app.use(cookieParser());
 
   registerApiRoutes(app, repoPath);
   registerPageRoutes(app, repoPath);
