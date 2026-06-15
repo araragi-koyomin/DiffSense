@@ -780,3 +780,36 @@
 - **学到的教训**:
   - T30-T32 三个新文件并行下发节省约 50% 时间
   - master 分支 merge 后忘记 `npm install`，cookie-parser 缺失导致 1 test fail — PR merge 后应检查新依赖
+
+---
+
+## [2026-06-15] Phase 16: 华为云部署 + 细节修复
+
+### 条目 #32 — 华为云 ECS 部署验证
+
+- **时间戳**: 2026-06-15
+- **平台**: 华为云 ECS（Ubuntu 22.04）
+- **公网地址**: http://1.94.122.43:9090/
+- **部署命令**:
+  ```bash
+  curl -fsSL https://get.docker.com | sh
+  docker run -d --name diffsense -p 9090:3000 \
+    -e DIFFSENSE_SECRET="<generated>" --restart always \
+    ghcr.io/araragi-koyomin/diffsense:latest web
+  ```
+- **安全组**: 华为云控制台 → ECS → 安全组 → 入方向规则添加 TCP 9090
+- **验证结果**: 公网访问正常，landing page、仓库分析、commit 详情浏览全部可用
+- **学到的教训**: `DIFFSENSE_SECRET` 需要用户自己生成随机字符串，README 已补充 `openssl rand -hex 32` 生成方法
+
+### 条目 #33 — 详情页 UI 重设计
+
+- **时间戳**: 2026-06-15
+- **改动**: detail.html 从单卡片堆砌改为双栏布局（左侧摘要/意图/风险，右侧原始消息/影响范围），hero 区显示 hash + metadata pills + GitHub 按钮，risk 改为彩色填充徽章
+- **CSS**: 新增 `.detail-hero`、`.hash-large`、`.meta-pill`、`.detail-grid`、`.detail-section`、`.risk-badge` 等样式
+
+### 条目 #34 — 分页导航修复
+
+- **时间戳**: 2026-06-15
+- **问题**: 翻页只有"加载更多"，无法回退
+- **修复**: 改为 `← 上一页` + `第 N 页 / 共 M 页` + `下一页 →` 三段式导航
+- **CSS**: 新增 `.page-indicator`

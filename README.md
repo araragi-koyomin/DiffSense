@@ -29,20 +29,31 @@ docker-compose up
 
 ## 部署到云服务器
 
+以华为云 ECS 为例（已在 Huawei Cloud ECS + Ubuntu 22.04 验证通过）：
+
 ```bash
-# SSH 登录服务器后
-docker pull ghcr.io/araragi-koyomin/diffsense:latest
+# 1. SSH 登录服务器
+ssh root@你的公网IP
+
+# 2. 安装 Docker（如未安装）
+curl -fsSL https://get.docker.com | sh
+systemctl start docker
+
+# 3. 生成加密密钥（至少 32 位随机字符串）
+openssl rand -hex 32
+
+# 4. 拉取镜像并启动
 docker run -d --name diffsense \
   -p 9090:3000 \
-  -e DIFFSENSE_SECRET="your-random-secret-32-chars" \
+  -e DIFFSENSE_SECRET="第3步生成的密钥" \
   --restart always \
   ghcr.io/araragi-koyomin/diffsense:latest web
 
-# 在云控制台安全组开放 TCP 9090 端口
-# 访问 http://你的公网IP:9090
+# 5. 华为云控制台 → ECS → 安全组 → 入方向规则 → 添加 TCP 9090，源地址 0.0.0.0/0
+# 6. 访问 http://你的公网IP:9090
 ```
 
-> `DIFFSENSE_SECRET` 用于加密用户 API Key。不设置则每次重启后已保存的 Key 失效（需重新输入）。
+> `DIFFSENSE_SECRET` 用于加密用户提交的 API Key。不设置则每次重启后已保存的 Key 失效（需重新输入）。
 
 ## 从源码安装（CLI 模式）
 
